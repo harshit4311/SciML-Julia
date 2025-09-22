@@ -76,7 +76,7 @@ h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
 
 integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
-adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.8, integrator))
+adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.2, integrator))
 samples, stats = AdvancedHMC.sample(h, kernel, p_flat, 500, adaptor, 500; progress = true)
 
 samples = hcat(samples...)
@@ -84,8 +84,10 @@ samples_reduced = samples[1:5, :]
 samples_reshape = reshape(samples_reduced, (500, 5, 1))
 Chain_Spiral = MCMCChains.Chains(samples_reshape)
 Plots.plot(Chain_Spiral)
+Plots.savefig("chain_spiral_plot.png")
 
 MCMCChains.autocorplot(Chain_Spiral)
+Plots.savefig("autocor_plot.png")
 
 pl = Plots.scatter(tsteps, ode_data[1, :], color = :red, label = "Data: Var1", xlabel = "t",
     title = "Spiral Neural ODE")
@@ -102,6 +104,7 @@ prediction = predict_neuralode(samples[:, idx])
 Plots.plot!(tsteps, prediction[1, :], color = :black, w = 2, label = "")
 Plots.plot!(tsteps, prediction[2, :], color = :black, w = 2, label = "Best fit prediction",
     ylims = (-2.5, 3.5))
+Plots.savefig("spiral_neural_ode_fit.png")
 
 pl = Plots.scatter(ode_data[1, :], ode_data[2, :], color = :red, label = "Data", xlabel = "Var1",
     ylabel = "Var2", title = "Spiral Neural ODE")
@@ -111,3 +114,4 @@ for k in 1:300
 end
 Plots.plot!(prediction[1, :], prediction[2, :], color = :black, w = 2,
     label = "Best fit prediction", ylims = (-2.5, 3))
+Plots.savefig("spiral_neural_ode_phase.png")
