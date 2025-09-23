@@ -14,15 +14,20 @@ import MCMCChains
 import StatsPlots
 import ComponentArrays
 
-u0 = [2.0; 0.0]
-datasize = 40
-tspan = (0.0, 1)
-tsteps = range(tspan[1], tspan[2], length = datasize)
-function trueODEfunc(du, u, p, t)
-    true_A = [-0.1 2.0; -2.0 -0.1]
-    du .= ((u .^ 3)'true_A)'
+# Define the Lotka-Volterra equations
+function lotka_volterra_func(du, u, p, t)
+    α, β, δ, γ = 1.5, 1.0, 3.0, 1.0
+    du[1] = dR = α * u[1] - β * u[1] * u[2] # Prey (Rabbits)
+    du[2] = dW = -δ * u[2] + γ * u[1] * u[2] # Predator (Wolves)
 end
-prob_trueode = DE.ODEProblem(trueODEfunc, u0, tspan)
+
+# Set initial conditions, time span, and generate data
+u0 = [1.0; 1.0]
+datasize = 100
+tspan = (0.0, 10.0)
+tsteps = range(tspan[1], tspan[2], length = datasize)
+
+prob_trueode = DE.ODEProblem(lotka_volterra_func, u0, tspan)
 ode_data = Array(DE.solve(prob_trueode, DE.Tsit5(), saveat = tsteps))
 
 dudt2 = Lux.Chain(x -> x .^ 3,
@@ -89,29 +94,28 @@ Plots.savefig("chain_spiral_plot.png")
 MCMCChains.autocorplot(Chain_Spiral)
 Plots.savefig("autocor_plot.png")
 
-pl = Plots.scatter(tsteps, ode_data[1, :], color = :red, label = "Data: Var1", xlabel = "t",
-    title = "Spiral Neural ODE")
-Plots.scatter!(tsteps, ode_data[2, :], color = :blue, label = "Data: Var2")
+pl = Plots.scatter(tsteps, ode_data[1, :], color = :blue, label = "Data: Rabbits", xlabel = "Time",
+    title = "Lotka-Volterra Neural ODE")
+Plots.scatter!(tsteps, ode_data[2, :], color = :red, label = "Data: Wolves")
 for k in 1:300
     resol = predict_neuralode(samples[:, 100:end][:, rand(1:400)])
-    Plots.plot!(tsteps, resol[1, :], alpha = 0.04, color = :red, label = "")
-    Plots.plot!(tsteps, resol[2, :], alpha = 0.04, color = :blue, label = "")
+    Plots.plot!(tsteps, resol[1, :], alpha = 0.04, color = :blue, label = "")
+    Plots.plot!(tsteps, resol[2, :], alpha = 0.04, color = :red, label = "")
 end
 
 losses = map(x -> loss_neuralode(x)[1], eachcol(samples))
 idx = findmin(losses)[2]
 prediction = predict_neuralode(samples[:, idx])
 Plots.plot!(tsteps, prediction[1, :], color = :black, w = 2, label = "")
-Plots.plot!(tsteps, prediction[2, :], color = :black, w = 2, label = "Best fit prediction",
-    ylims = (-2.5, 3.5))
-Plots.savefig("spiral_neural_ode_fit.png")
+Plots.plot!(tsteps, prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
+Plots.savefig("lotka_volterra_fit.png")
 
-pl = Plots.scatter(ode_data[1, :], ode_data[2, :], color = :red, label = "Data", xlabel = "Var1",
-    ylabel = "Var2", title = "Spiral Neural ODE")
+pl = Plots.scatter(ode_data[1, :], ode_data[2, :], color = :blue, label = "Data", xlabel = "Rabbits",
+    ylabel = "Wolves", title = "Lotka-Volterra Phase Space")
 for k in 1:300
     resol = predict_neuralode(samples[:, 100:end][:, rand(1:400)])
-    Plots.plot!(resol[1, :], resol[2, :], alpha = 0.04, color = :red, label = "")
+    Plots.plot!(resol[1, :], resol[2, :], alpha = 0.04, color = :purple, label = "")
 end
 Plots.plot!(prediction[1, :], prediction[2, :], color = :black, w = 2,
-    label = "Best fit prediction", ylims = (-2.5, 3))
-Plots.savefig("spiral_neural_ode_phase.png")
+    label = "Best fit prediction")
+Plots.savefig("lotka_volterra_phase.png")
