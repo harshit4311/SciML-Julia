@@ -76,17 +76,25 @@ function dldθ(θ_flat)
     return x, grad
 end
 
+# --- HMC Sampling ---
+# Hyperparameters
+n_samples = 300
+n_adapts = 300
+target_acceptance_rate = 0.45
+
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
 
-integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
+# Integrator with initial step size; the adaptor will tune it.
+integrator = AdvancedHMC.Leapfrog(1.0)
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
-adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.2, integrator))
-samples, stats = AdvancedHMC.sample(h, kernel, p_flat, 500, adaptor, 500; progress = true)
+adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(target_acceptance_rate, integrator))
+samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_adapts; progress = true)
 
 samples = hcat(samples...)
-samples_reduced = samples[1:5, :]
-samples_reshape = reshape(samples_reduced, (500, 5, 1))
+samples_reduced = samples[1:5, :] # Select first 5 parameters
+# Reshape for MCMCChains: (iterations, parameters, chains)
+samples_reshape = reshape(permutedims(samples_reduced), (n_samples, 5, 1))
 Chain_Spiral = MCMCChains.Chains(samples_reshape)
 Plots.plot(Chain_Spiral)
 Plots.savefig("chain_spiral_plot.png")
