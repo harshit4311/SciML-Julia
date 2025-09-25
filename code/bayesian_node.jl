@@ -13,6 +13,7 @@ import AdvancedHMC
 import MCMCChains
 import StatsPlots
 import ComponentArrays
+import JLD2
 
 
 # -------------------------------
@@ -106,11 +107,20 @@ n_adapts = 50
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
-integrator = AdvancedHMC.Leapfrog(0.05)
+integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
-adaptor = AdvancedHMC.MassMatrixAdaptor(metric)
+adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.70, integrator))
 
 samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_adapts; progress = true)
+
+# Save results for diagnostics
+JLD2.save(
+    "model-diagnostics/mcmc_results.jld2",
+    "samples", samples,
+    "stats", stats,
+    "tsteps", tsteps,
+    "ode_data", ode_data
+)
 
 
 # -------------------------------
