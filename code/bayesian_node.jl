@@ -102,8 +102,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 50
-n_adapts = 50
+n_samples = 500
+n_adapts = 500
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)

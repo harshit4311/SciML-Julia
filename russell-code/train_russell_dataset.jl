@@ -21,9 +21,9 @@ using Statistics: mean, std
 # -------------------------------
 # Load Russell 1000 Growth vs Value data
 # -------------------------------
-data = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-dataset/growth_value_cumulative_returns_corrected.csv", DataFrames.DataFrame)
-const growth_data = data[!, "growth_cumulative_ret"]
-const value_data = data[!, "value_cumulative_ret"]
+data = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-dataset/russell_predator_prey.csv", DataFrames.DataFrame)
+const growth_data = data[!, "growth_ret"]
+const value_data = data[!, "value_ret"]
 
 # Normalize the data
 const growth_mean, growth_std = mean(growth_data), std(growth_data)
