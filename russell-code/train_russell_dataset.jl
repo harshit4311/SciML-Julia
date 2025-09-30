@@ -16,36 +16,26 @@ import ComponentArrays
 import CSV
 import DataFrames
 using Statistics: mean, std
-
+# import JLD2 --- (ignore for now)
 
 # -------------------------------
-# Load Russell 1000 Growth vs Value data
+# Load Russell dataset
 # -------------------------------
-data = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-dataset/russell_predator_prey.csv", DataFrames.DataFrame)
-const growth_data = data[!, "growth_ret"]
-const value_data = data[!, "value_ret"]
-
-# Normalize the data
-const growth_mean, growth_std = mean(growth_data), std(growth_data)
-const value_mean, value_std = mean(value_data), std(value_data)
-
-const normalized_growth = (growth_data .- growth_mean) ./ growth_std
-const normalized_value = (value_data .- value_mean) ./ value_std
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-dataset/russell_predator_prey.csv", DataFrames.DataFrame)
+ode_data = [df.growth_ret'; df.value_ret']
 
 # Initial conditions and data
-u0 = [normalized_growth[1]; normalized_value[1]]
-datasize = length(growth_data)
-tspan = (0.0, float(datasize))
+u0 = ode_data[:, 1]
+datasize = size(ode_data, 2)
+tspan = (0.0, Float64(datasize-1))
 tsteps = range(tspan[1], tspan[2], length = datasize)
-
-# The ode_data is now the normalized data
-ode_data = hcat(normalized_growth, normalized_value)'
 
 
 # -------------------------------
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
+    x -> x .^ 3,
     Lux.Dense(2, 50, tanh),
     Lux.Dense(50, 2)
 )
@@ -60,7 +50,7 @@ end
 
 function prob_neuralode(u0, p)
     prob = DE.ODEProblem(neuralodefunc, u0, tspan, p)
-    DE.solve(prob, DE.Rodas5(), saveat = tsteps)
+    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5)
 end
 
 
@@ -142,7 +132,7 @@ Plots.savefig("autocor_plot.png")
 pl = Plots.scatter(
     tsteps, ode_data[1, :],
     color = :blue, label = "Data: Growth",
-    xlabel = "Time", title = "Russell 1000 Growth vs Value"
+    xlabel = "Time", title = "Russell Predator-Prey Neural ODE"
 )
 Plots.scatter!(
     tsteps, ode_data[2, :],
@@ -161,7 +151,7 @@ prediction = predict_neuralode(samples[:, idx])
 
 Plots.plot!(tsteps, prediction[1, :], color = :black, w = 2, label = "")
 Plots.plot!(tsteps, prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
-Plots.savefig("russell_fit.png")
+Plots.savefig("lotka_volterra_fit.png")
 
 
 # -------------------------------
@@ -171,7 +161,7 @@ pl = Plots.scatter(
     ode_data[1, :], ode_data[2, :],
     color = :blue, label = "Data",
     xlabel = "Growth", ylabel = "Value",
-    title = "Russell 1000 Phase Space"
+    title = "Russell Predator-Prey Phase Space"
 )
 
 for k in 1:300
@@ -180,4 +170,4 @@ for k in 1:300
 end
 
 Plots.plot!(prediction[1, :], prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
-Plots.savefig("russell_phase.png")
+Plots.savefig("lotka_volterra_phase.png")
