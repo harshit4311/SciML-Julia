@@ -15,7 +15,7 @@ import StatsPlots
 import ComponentArrays
 import CSV
 import DataFrames
-using Statistics: mean, std
+using Statistics: mean, std, quantile
 # import JLD2 --- (ignore for now)
 
 # -------------------------------
@@ -37,7 +37,7 @@ tsteps = range(tspan[1], tspan[2], length = datasize)
 dudt2 = Lux.Chain(
     x -> x .^ 3,
     Lux.Dense(2, 50, tanh),
-    Lux.Dense(50, 2)
+    Lux.Dense(50, 2, tanh) # Add tanh to bound the output
 )
 
 rng = Random.default_rng()
@@ -98,8 +98,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 50
-n_adapts = 50
+n_samples = 100
+n_adapts = 100
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
@@ -114,6 +114,7 @@ samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_ada
 # MCMC diagnostics
 # -------------------------------
 samples = hcat(samples...)
+#= comment the following lines(till plot.save autocorr_plot.fig) if we want to run for smaller sample sizes =#
 samples_reduced = samples[1:5, :]
 samples_reshape = reshape(samples_reduced, (n_samples, 5, 1))
 
@@ -127,31 +128,39 @@ Plots.savefig("autocor_plot.png")
 
 
 # -------------------------------
-# Plot time-series fit
+# Plot time-series fit with confidence intervals
 # -------------------------------
-pl = Plots.scatter(
-    tsteps, ode_data[1, :],
-    color = :blue, label = "Data: Growth",
-    xlabel = "Time", title = "Russell Predator-Prey Neural ODE"
-)
-Plots.scatter!(
-    tsteps, ode_data[2, :],
-    color = :red, label = "Data: Value"
-)
 
-for k in 1:300
-    resol = predict_neuralode(samples[:, 1:end][:, rand(1:size(samples, 2))])
-    Plots.plot!(tsteps, resol[1, :], alpha = 0.04, color = :blue, label = "")
-    Plots.plot!(tsteps, resol[2, :], alpha = 0.04, color = :red, label = "")
-end
+# Generate predictions for all posterior samples
+predictions = [predict_neuralode(p) for p in eachcol(samples)];
 
-losses = map(x -> loss_neuralode(x)[1], eachcol(samples))
-idx = findmin(losses)[2]
-prediction = predict_neuralode(samples[:, idx])
+# Separate predictions for each species (Growth and Value)
+growth_preds = hcat([p[1, :] for p in predictions]...);
+value_preds = hcat([p[2, :] for p in predictions]...);
 
-Plots.plot!(tsteps, prediction[1, :], color = :black, w = 2, label = "")
-Plots.plot!(tsteps, prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
-Plots.savefig("lotka_volterra_fit.png")
+# Calculate quantiles for the 90% confidence interval
+lower_growth = [quantile(growth_preds[i, :], 0.05) for i in 1:datasize];
+upper_growth = [quantile(growth_preds[i, :], 0.95) for i in 1:datasize];
+lower_value = [quantile(value_preds[i, :], 0.05) for i in 1:datasize];
+upper_value = [quantile(value_preds[i, :], 0.95) for i in 1:datasize];
+
+# Find the best fit prediction (lowest loss)
+losses = map(x -> loss_neuralode(x)[1], eachcol(samples));
+idx = findmin(losses)[2];
+best_fit_prediction = predict_neuralode(samples[:, idx]);
+
+# Plot the results
+pl = Plots.plot(tsteps, best_fit_prediction[1,:], ribbon=(best_fit_prediction[1,:] .- lower_growth, upper_growth .- best_fit_prediction[1,:]),
+    fillalpha=0.2, color=:blue, label="Growth Prediction",
+    xlabel="Time", title="Russell Predator-Prey Neural ODE");
+Plots.plot!(tsteps, best_fit_prediction[2,:], ribbon=(best_fit_prediction[2,:] .- lower_value, upper_value .- best_fit_prediction[2,:]),
+    fillalpha=0.2, color=:red, label="Value Prediction");
+
+# Scatter plot of the original data
+Plots.scatter!(tsteps, ode_data[1, :], color = :blue, label = "Data: Growth");
+Plots.scatter!(tsteps, ode_data[2, :], color = :red, label = "Data: Value");
+
+Plots.savefig("russell_fit_with_ci.png");
 
 
 # -------------------------------
@@ -169,5 +178,20 @@ for k in 1:300
     Plots.plot!(resol[1, :], resol[2, :], alpha = 0.04, color = :purple, label = "")
 end
 
-Plots.plot!(prediction[1, :], prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
-Plots.savefig("lotka_volterra_phase.png")
+# Plots.plot!(prediction[1, :], prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
+Plots.plot!(best_fit_prediction[1, :], best_fit_prediction[2, :], color = :black, w = 2, label = "Best fit prediction")
+Plots.savefig("russell_phase_space.png")
+
+
+# -------------------------------
+# Loss statistics and plot
+# -------------------------------
+println("Loss statistics across posterior samples:")
+println("Min loss: ", minimum(losses))
+println("Mean loss: ", mean(losses))
+println("Std dev of loss: ", std(losses))
+
+Plots.histogram(losses, label="Loss Distribution",
+    xlabel="Loss", ylabel="Frequency",
+    title="Distribution of Loss over Posterior Samples")
+Plots.savefig("loss_distribution.png")
