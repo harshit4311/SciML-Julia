@@ -35,9 +35,9 @@ tsteps = range(tspan[1], tspan[2], length = datasize)
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
-    x -> x .^ 3,
     Lux.Dense(2, 50, tanh),
-    Lux.Dense(50, 2, tanh) # Add tanh to bound the output
+    Lux.Dense(50, 50, tanh),
+    Lux.Dense(50, 2)
 )
 
 rng = Random.default_rng()
@@ -45,7 +45,7 @@ p, st = Lux.setup(rng, dudt2)
 const _st = st
 
 function neuralodefunc(u, p, t)
-    dudt2(u, p, _st)[1]
+    dudt2(u, p, _st)[1] .* 0.1
 end
 
 function prob_neuralode(u0, p)
@@ -98,8 +98,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 100
-n_adapts = 100
+n_samples = 50
+n_adapts = 50
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
@@ -184,8 +184,13 @@ Plots.savefig("russell_phase_space.png")
 
 
 # -------------------------------
-# Loss statistics and plot
+# Training Complete! --- Loss statistics & plot 
 # -------------------------------
+
+println()
+println("----- Training complete! -----")
+println()
+
 println("Loss statistics across posterior samples:")
 println("Min loss: ", minimum(losses))
 println("Mean loss: ", mean(losses))
