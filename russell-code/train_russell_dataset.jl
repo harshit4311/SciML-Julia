@@ -21,8 +21,8 @@ using Statistics: mean, std, quantile
 # -------------------------------
 # Load Russell dataset
 # -------------------------------
-df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-dataset/russell_predator_prey.csv", DataFrames.DataFrame)
-ode_data = [df.growth_ret'; df.value_ret']
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_20_russell_growth_value_predator_prey.csv", DataFrames.DataFrame)
+ode_data = [df.Growth_Population'; df.Value_Population']
 
 # Initial conditions and data
 u0 = ode_data[:, 1]
