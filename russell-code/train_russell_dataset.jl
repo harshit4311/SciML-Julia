@@ -45,7 +45,8 @@ p, st = Lux.setup(rng, dudt2)
 const _st = st
 
 function neuralodefunc(u, p, t)
-    dudt2(u, p, _st)[1] .* 0.1
+    # dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
+    dudt2(u, p, _st)[1]   # NOT scaled
 end
 
 function prob_neuralode(u0, p)
