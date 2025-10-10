@@ -1,42 +1,58 @@
+# ----------------------------------------------------
 # Import necessary libraries
+# ----------------------------------------------------
 import CSV
 import DataFrames
 import Plots
+using Dates
 
-# Set the plot theme to dark for a professional look
-# Plots.theme(:dark)
+# ----------------------------------------------------
+# Define the path to the new dataset
+# ----------------------------------------------------
+file_path = "/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_200_russell_indices.csv"
 
-# Define the path to the dataset
-file_path = "/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/growth_value_cumulative_returns_corrected.csv"
-
+# ----------------------------------------------------
 # Load the dataset into a DataFrame
+# ----------------------------------------------------
 df = CSV.read(file_path, DataFrames.DataFrame)
 
-# Create the time-series plot using the Date column for the x-axis
+# Ensure the date column is of Date type by extracting the first 10 characters
+df.date = Date.(first.(string.(df.date), 10))
+
+# ----------------------------------------------------
+# Create the time-series plot with improved x-axis ticks
+# ----------------------------------------------------
+
+# Determine the range of years for clear ticks
+start_year = year(minimum(df.date))
+end_year = year(maximum(df.date))
+xticks = [Date(y) for y in start_year:end_year+1]
+
 p = Plots.plot(
-    df.Date,
-    df.growth_cumulative_ret,
-    label="Growth Cumulative Returns",
-    xlabel="Date",
-    ylabel="Cumulative Returns",
-    title="Cumulative Returns of Growth and Value ETFs",
-    legend=:topleft
+    df.date,
+    df.Growth_detrended,
+    label = "Growth (Detrended)",
+    xlabel = "Date",
+    ylabel = "Detrended Value",
+    title = "Detrended Growth vs Value Indices (Russell 200)",
+    legend = :topleft,
+    grid = true,
+    size = (900, 500),
+    xticks = xticks,
+    xrotation = 45
 )
 
+# Add Value series to the same plot
 Plots.plot!(
     p,
-    df.Date,
-    df.value_cumulative_ret,
-    label="Value Cumulative Returns"
+    df.date,
+    df.Value_detrended,
+    label = "Value (Detrended)"
 )
 
-# Add a grid
-Plots.plot!(grid=true)
+# ----------------------------------------------------
+# Save the plot
+# ----------------------------------------------------
+Plots.savefig(p, "detrended_russell_indices_plot.png")
 
-# Save the plot to a file
-Plots.savefig(p, "cumulative_returns_dataset_plot_styled.png")
-
-println("Styled plot saved to cumulative_returns_dataset_plot_styled.png")
-
-# To run this file, open the Julia REPL in your project directory and execute:
-# include("code/plot_russell_dataset.jl")
+println("✅ Styled plot with improved x-axis saved to detrended_russell_indices_plot.png")
