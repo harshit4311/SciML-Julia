@@ -21,8 +21,8 @@ using Statistics: mean, std, quantile
 # -------------------------------
 # Load Russell dataset
 # -------------------------------
-df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_20_russell_growth_value_predator_prey.csv", DataFrames.DataFrame)
-ode_data = [df.Growth_Population'; df.Value_Population']
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/growth_value_cumulative_returns_corrected.csv", DataFrames.DataFrame)
+ode_data = [df.growth_cumulative_ret'; df.value_cumulative_ret']
 
 # Initial conditions and data
 u0 = ode_data[:, 1]
@@ -45,8 +45,8 @@ p, st = Lux.setup(rng, dudt2)
 const _st = st
 
 function neuralodefunc(u, p, t)
-    # dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
-    dudt2(u, p, _st)[1]   # NOT scaled
+    dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
+    # dudt2(u, p, _st)[1]   # NOT scaled
 end
 
 function prob_neuralode(u0, p)
