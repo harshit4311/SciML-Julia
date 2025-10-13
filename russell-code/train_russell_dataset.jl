@@ -21,8 +21,8 @@ using Statistics: mean, std, quantile
 # -------------------------------
 # Load Russell dataset
 # -------------------------------
-df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/growth_value_cumulative_returns_corrected.csv", DataFrames.DataFrame)
-ode_data = [df.growth_cumulative_ret'; df.value_cumulative_ret']
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_200_russell_indices.csv", DataFrames.DataFrame)
+ode_data = [df.Growth_detrended'; df.Value_detrended']
 
 # Initial conditions and data
 u0 = ode_data[:, 1]
@@ -35,8 +35,8 @@ tsteps = range(tspan[1], tspan[2], length = datasize)
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
-    Lux.Dense(2, 50, tanh),
-    Lux.Dense(50, 50, tanh),
+    Lux.Dense(2, 50, Lux.softsign),
+    Lux.Dense(50, 50, Lux.softsign),
     Lux.Dense(50, 2)
 )
 
@@ -99,8 +99,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 50
-n_adapts = 50
+n_samples = 100
+n_adapts = 100
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
@@ -150,10 +150,17 @@ losses = map(x -> loss_neuralode(x)[1], eachcol(samples));
 idx = findmin(losses)[2];
 best_fit_prediction = predict_neuralode(samples[:, idx]);
 
+# Set y-axis limits based on the actual data range for better visualization
+data_min = minimum(ode_data)
+data_max = maximum(ode_data)
+y_padding = (data_max - data_min) * 0.1 # Add 10% padding
+ylims = (data_min - y_padding, data_max + y_padding)
+
 # Plot the results
 pl = Plots.plot(tsteps, best_fit_prediction[1,:], ribbon=(best_fit_prediction[1,:] .- lower_growth, upper_growth .- best_fit_prediction[1,:]),
     fillalpha=0.2, color=:blue, label="Growth Prediction",
-    xlabel="Time", title="Russell Predator-Prey Neural ODE");
+    xlabel="Time", title="Russell Predator-Prey Neural ODE",
+    ylims=ylims);
 Plots.plot!(tsteps, best_fit_prediction[2,:], ribbon=(best_fit_prediction[2,:] .- lower_value, upper_value .- best_fit_prediction[2,:]),
     fillalpha=0.2, color=:red, label="Value Prediction");
 
