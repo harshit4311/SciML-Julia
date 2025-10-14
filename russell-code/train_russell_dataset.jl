@@ -21,8 +21,27 @@ using Statistics: mean, std, quantile
 # -------------------------------
 # Load Russell dataset
 # -------------------------------
-df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_200_russell_indices.csv", DataFrames.DataFrame)
-ode_data = [df.Growth_detrended'; df.Value_detrended']
+# df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_200_russell_indices.csv", DataFrames.DataFrame)
+# ode_data = [df.Growth_detrended'; df.Value_detrended']
+
+# ---------------------------------------
+# Load SYNTHETIC Russell dataset
+# ---------------------------------------
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/synthetic-russell-dataset-200.csv", DataFrames.DataFrame)
+
+# Extract columns
+growth = df.Growth
+value  = df.Value
+
+# Convert to Neural ODE input format
+ode_data = [growth'; value']
+
+# Initial condition & timespan
+u0 = ode_data[:, 1]
+datasize = size(ode_data, 2)
+tspan = (0.0, Float64(datasize - 1))
+tsteps = range(tspan[1], tspan[2], length = datasize)
+
 
 # Initial conditions and data
 u0 = ode_data[:, 1]
@@ -45,8 +64,8 @@ p, st = Lux.setup(rng, dudt2)
 const _st = st
 
 function neuralodefunc(u, p, t)
-    dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
-    # dudt2(u, p, _st)[1]   # NOT scaled
+    # dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
+    dudt2(u, p, _st)[1]   # NOT scaled
 end
 
 function prob_neuralode(u0, p)
@@ -99,8 +118,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 100
-n_adapts = 100
+n_samples = 50
+n_adapts = 50
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
