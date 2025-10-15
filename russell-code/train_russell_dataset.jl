@@ -27,7 +27,7 @@ using Statistics: mean, std, quantile
 # ---------------------------------------
 # Load SYNTHETIC Russell dataset
 # ---------------------------------------
-df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/synthetic-russell-dataset-200.csv", DataFrames.DataFrame)
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/LV_synthetic_russell_growth_value_200.csv", DataFrames.DataFrame)
 
 # Extract columns
 growth = df.Growth
