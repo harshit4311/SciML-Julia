@@ -70,7 +70,7 @@ end
 
 function prob_neuralode(u0, p)
     prob = DE.ODEProblem(neuralodefunc, u0, tspan, p)
-    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5)
+    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5, dtmax=0.1)
 end
 
 
