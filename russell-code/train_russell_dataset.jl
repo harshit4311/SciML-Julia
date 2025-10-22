@@ -54,8 +54,8 @@ tsteps = range(tspan[1], tspan[2], length = datasize)
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
-    Lux.Dense(2, 50, Lux.softsign),
-    Lux.Dense(50, 50, Lux.softsign),
+    Lux.Dense(2, 50, Lux.tanh),
+    Lux.Dense(50, 50, Lux.tanh),
     Lux.Dense(50, 2)
 )
 
