@@ -60,9 +60,9 @@ datasize = length(tsteps)
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
-    Lux.Dense(2, 20, Lux.relu),
-    Lux.Dense(20, 20, Lux.relu),
-    Lux.Dense(20, 20, Lux.relu),
+    Lux.Dense(2, 20, Lux.tanh),
+    Lux.Dense(20, 20, Lux.tanh),
+    Lux.Dense(20, 20, Lux.tanh),
     Lux.Dense(20, 2)
 )
 
@@ -125,14 +125,14 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 100
-n_adapts = 100
+n_samples = 500
+n_adapts = 500
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
 integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
-adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.7, integrator))
+adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.8, integrator))
 
 samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_adapts; progress = true)
 
