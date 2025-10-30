@@ -21,38 +21,51 @@ using Statistics: mean, std, quantile
 # -------------------------------
 # Load Russell dataset
 # -------------------------------
-# df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/detrended_200_russell_indices.csv", DataFrames.DataFrame)
-# ode_data = [df.Growth_detrended'; df.Value_detrended']
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
+
+# Extract columns
+growth = df.Growth
+value  = df.Value
+
+# Convert to Neural ODE input format
+ode_data = [growth'; value']
+
+# Initial condition & timespan
+u0 = ode_data[:, 1]
+datasize = size(ode_data, 2)
+tspan = (0.0, Float64(datasize - 1))
+tsteps = range(tspan[1], tspan[2], length = datasize)
+
 
 # ---------------------------------------
 # Generate Lotka-Volterra dataset
 # ---------------------------------------
-function lotka_volterra!(du, u, p, t)
-  x, y = u
-  α, β, δ, γ = p
-  du[1] = dx = α*x - β*x*y
-  du[2] = dy = -δ*y + γ*x*y
-end
+# function lotka_volterra!(du, u, p, t)
+#   x, y = u
+#   α, β, δ, γ = p
+#   du[1] = dx = α*x - β*x*y
+#   du[2] = dy = -δ*y + γ*x*y
+# end
 
-# Initial condition for LV
-u0_lv = [1.0, 1.0]
+# # Initial condition for LV
+# u0_lv = [1.0, 1.0]
 
-# Simulation interval and intermediary points
-tspan = (0.0, 3.5)
-tsteps = 0.0:0.1:3.5
+# # Simulation interval and intermediary points
+# tspan = (0.0, 3.5)
+# tsteps = 0.0:0.1:3.5
 
-# LV equation parameter. p = [α, β, δ, γ]
-p_lv = [1.5, 1.0, 3.0, 1.0]
+# # LV equation parameter. p = [α, β, δ, γ]
+# p_lv = [1.5, 1.0, 3.0, 1.0]
 
-# Generate the data
-prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
-sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat = tsteps)
-ode_data = Array(sol_lv)
+# # Generate the data
+# prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
+# sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat = tsteps)
+# ode_data = Array(sol_lv)
 
-# Initial condition & timespan for Neural ODE
-u0 = ode_data[:, 1]
-datasize = length(tsteps)
-# tspan and tsteps are already defined above
+# # Initial condition & timespan for Neural ODE
+# u0 = ode_data[:, 1]
+# datasize = length(tsteps)
+# # tspan and tsteps are already defined above
 
 
 
@@ -60,10 +73,10 @@ datasize = length(tsteps)
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
-    Lux.Dense(2, 20, Lux.tanh),
-    Lux.Dense(20, 20, Lux.tanh),
-    Lux.Dense(20, 20, Lux.tanh),
-    Lux.Dense(20, 2)
+    Lux.Dense(2, 32, Lux.tanh),
+    Lux.Dense(32, 32, Lux.tanh),
+    Lux.Dense(32, 32, Lux.tanh),
+    Lux.Dense(32, 2)
 )
 
 rng = Random.default_rng()
@@ -71,13 +84,13 @@ p, st = Lux.setup(rng, dudt2)
 const _st = st
 
 function neuralodefunc(u, p, t)
-    # dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
-    dudt2(u, p, _st)[1]   # NOT scaled
+    dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
+    # dudt2(u, p, _st)[1]   # NOT scaled
 end
 
 function prob_neuralode(u0, p)
     prob = DE.ODEProblem(neuralodefunc, u0, tspan, p)
-    DE.solve(prob, DE.Tsit5(), saveat = tsteps, maxiters=1e5)
+    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5)
 end
 
 
@@ -112,7 +125,7 @@ end
 # -------------------------------
 l(θ_flat) = begin
     θ = unflatten_p(θ_flat)
-    -sum(abs2, ode_data .- predict_neuralode(θ)) - sum(θ_flat .* θ_flat)
+    -sum(abs2, ode_data .- predict_neuralode(θ)) - 0.01 * sum(θ_flat .* θ_flat)
 end
 
 function dldθ(θ_flat)
@@ -125,8 +138,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 500
-n_adapts = 500
+n_samples = 200
+n_adapts = 200
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
