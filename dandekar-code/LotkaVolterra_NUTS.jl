@@ -247,4 +247,3 @@ Plots.histogram(losses, label="Loss Distribution",
     xlabel="Loss", ylabel="Frequency",
     title="Distribution of Loss over Posterior Samples")
 Plots.savefig("loss_distribution.png")
-
