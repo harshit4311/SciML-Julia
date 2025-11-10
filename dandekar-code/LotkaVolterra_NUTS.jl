@@ -21,7 +21,7 @@ using Statistics: mean, std, quantile
 # -------------------------------
 # Load Russell dataset
 # -------------------------------
-df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
+df = CSV.read("/teamspace/studios/this_studio/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
 
 # Extract columns
 growth = df.Growth
@@ -138,8 +138,8 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 200
-n_adapts = 200
+n_samples = 50
+n_adapts = 50
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
@@ -247,3 +247,4 @@ Plots.histogram(losses, label="Loss Distribution",
     xlabel="Loss", ylabel="Frequency",
     title="Distribution of Loss over Posterior Samples")
 Plots.savefig("loss_distribution.png")
+
