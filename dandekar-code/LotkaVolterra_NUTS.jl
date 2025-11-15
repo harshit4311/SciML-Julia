@@ -1,3 +1,5 @@
+# on CPU (on my local machine)
+
 # SciML Libraries
 import SciMLSensitivity as SMS
 import DifferentialEquations as DE
