@@ -2,6 +2,8 @@
 # GPU forward solves (posterior predictions) + CPU HMC (AdvancedHMC)
 # Single-file runnable script. Designed to avoid device-mismatch issues.
 
+# used T4 & L40s GPUs on lightning.ai
+
 using CSV, DataFrames
 using Random
 using Statistics: mean, std, quantile
