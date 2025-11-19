@@ -1,3 +1,5 @@
+# code for CPU runpod instance (NOT using GPUs in this version)
+
 # SciML Libraries
 import SciMLSensitivity as SMS
 import DifferentialEquations as DE
