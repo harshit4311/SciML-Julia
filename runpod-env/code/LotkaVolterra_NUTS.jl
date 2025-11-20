@@ -24,7 +24,7 @@ using Statistics: mean, std, quantile
 # Load Russell dataset
 # -------------------------------
 # df = CSV.read("/root/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
-df = CSV.read("/workspace/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
+df = CSV.read("dataset/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
 
 # Extract columns
 growth = df.Growth
