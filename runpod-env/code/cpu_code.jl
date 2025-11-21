@@ -18,7 +18,6 @@ import ComponentArrays
 import CSV
 import DataFrames
 using Statistics: mean, std, quantile
-# import JLD2 --- (ignore for now)
 
 # -------------------------------
 # Load Russell dataset
@@ -38,39 +37,6 @@ u0 = ode_data[:, 1]
 datasize = size(ode_data, 2)
 tspan = (0.0, Float64(datasize - 1))
 tsteps = range(tspan[1], tspan[2], length = datasize)
-
-
-# ---------------------------------------
-# Generate Lotka-Volterra dataset
-# ---------------------------------------
-# function lotka_volterra!(du, u, p, t)
-#   x, y = u
-#   α, β, δ, γ = p
-#   du[1] = dx = α*x - β*x*y
-#   du[2] = dy = -δ*y + γ*x*y
-# end
-
-# # Initial condition for LV
-# u0_lv = [1.0, 1.0]
-
-# # Simulation interval and intermediary points
-# tspan = (0.0, 3.5)
-# tsteps = 0.0:0.1:3.5
-
-# # LV equation parameter. p = [α, β, δ, γ]
-# p_lv = [1.5, 1.0, 3.0, 1.0]
-
-# # Generate the data
-# prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
-# sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat = tsteps)
-# ode_data = Array(sol_lv)
-
-# # Initial condition & timespan for Neural ODE
-# u0 = ode_data[:, 1]
-# datasize = length(tsteps)
-# # tspan and tsteps are already defined above
-
-
 
 # -------------------------------
 # Neural ODE definition
@@ -157,7 +123,6 @@ samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_ada
 # MCMC diagnostics
 # -------------------------------
 samples = hcat(samples...)
-#= comment the following lines(till plot.save autocorr_plot.fig) if we want to run for smaller sample sizes =#
 samples_reduced = samples[1:5, :]
 samples_reshape = reshape(samples_reduced, (n_samples, 5, 1))
 
@@ -236,7 +201,6 @@ Plots.savefig("russell_phase_space.png")
 # -------------------------------
 # Training Complete! --- Loss statistics & plot 
 # -------------------------------
-
 println()
 println("----- Training complete! -----")
 println()
