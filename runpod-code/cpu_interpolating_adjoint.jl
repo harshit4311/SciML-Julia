@@ -1,4 +1,5 @@
 # code for CPU runpod instance (NOT using GPUs in this version)
+# added InterpolatingAdjoint method
 
 # SciML Libraries
 import SciMLSensitivity as SMS
@@ -24,7 +25,7 @@ using Statistics: mean, std, quantile
 # Load Russell dataset
 # -------------------------------
 # df = CSV.read("/root/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
-df = CSV.read("/workspace/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
+df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
 
 # Extract columns
 growth = df.Growth
@@ -91,9 +92,12 @@ function neuralodefunc(u, p, t)
     # dudt2(u, p, _st)[1]   # NOT scaled
 end
 
+# Define a template problem to avoid reconstruction
+prob_template = DE.ODEProblem(neuralodefunc, u0, tspan, p)
+
 function prob_neuralode(u0, p)
-    prob = DE.ODEProblem(neuralodefunc, u0, tspan, p)
-    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5)
+    prob = DE.remake(prob_template, u0=u0, p=p)
+    DE.solve(prob, DE.Tsit5(), saveat = tsteps, maxiters=1e5, sensealg=SMS.InterpolatingAdjoint(autojacvec=SMS.ZygoteVJP()))
 end
 
 
