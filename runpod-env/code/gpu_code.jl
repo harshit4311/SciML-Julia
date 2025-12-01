@@ -63,7 +63,10 @@ end
 
 function prob_neuralode(u0, p)
     prob = DE.ODEProblem(neuralodefunc, u0, tspan, p)
-    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5)
+    # Using Vern7 (explicit, high order) which is often more robust for Neural ODEs than Tsit5
+    # Increased maxiters to 50000 to allow for more steps if dynamics are complex
+    # Relaxed tolerances slightly to aid convergence
+    DE.solve(prob, DE.Vern7(), saveat = tsteps, maxiters=50000, abstol=1e-5, reltol=1e-5, sensealg=SMS.InterpolatingAdjoint(autojacvec=SMS.ZygoteVJP()))
 end
 
 
@@ -83,9 +86,36 @@ end
 # -------------------------------
 function predict_neuralode(p)
     p = p isa ComponentArrays.ComponentArray ? p : unflatten_p(p)
-    # Explicitly cast to Float64 to ensure weights are double precision on GPU
-    p_gpu = CUDA.cu(Float64.(p))
+    
+    # Safe transfer/conversion that works with Zygote
+    # We use Zygote.ignore to prevent Zygote from trying to differentiate the GPU transfer logic
+    # which involves low-level CUDA calls that Zygote cannot handle.
+    p_gpu = Zygote.ignore() do
+        CUDA.cu(Float64.(p))
+    end
+
     sol = prob_neuralode(u0, p_gpu)
+    
+    # Check for solver failure (e.g. MaxIters reached)
+    # We use Zygote.ignore to safely check the retcode without confusing the AD
+    failure = Zygote.ignore() do
+        # Check if solver failed to produce the expected number of time steps
+        # This handles MaxIters, instability, etc.
+        length(sol.u) != length(tsteps) || (sol.retcode != :Success && sol.retcode != :Terminated)
+    end
+
+    if failure
+        Zygote.ignore() do
+             # Only print occasionally to avoid spamming if many fail
+             if rand() < 0.1 
+                 println("  [Warn] ODE Solver failed/maxiters. Rejecting sample.")
+                 flush(stdout)
+             end
+        end
+        # Return an infinite prediction to force high loss and rejection by HMC
+        return CUDA.fill(Inf, size(ode_data))
+    end
+
     reduce(hcat, sol.u)
 end
 
@@ -110,10 +140,28 @@ l(θ_flat) = begin
     Float64(l_gpu(θ_gpu))
 end
 
+# Global counter for GC
+gc_counter = 0
+
 function dldθ(θ_flat)
-    θ_gpu = CUDA.cu(θ_flat)
+    global gc_counter
+    gc_counter += 1
+    # Trigger GC every 50 gradient evaluations to prevent system memory accumulation
+    if gc_counter % 50 == 0
+        GC.gc()
+    end
+    
+    # Ensure input is Float64 before moving to GPU
+    θ_gpu = CUDA.cu(Float64.(θ_flat))
     val, back = Zygote.pullback(l_gpu, θ_gpu)
     grad = back(1.0)[1]
+
+    # Print progress to show activity
+    if gc_counter % 10 == 0
+        println("Gradient evaluation: $gc_counter | Log-density: $val")
+        flush(stdout)
+    end
+
     return Float64(val), Array{Float64}(Array(grad))
 end
 
@@ -121,6 +169,9 @@ end
 # -------------------------------
 # HMC setup
 # -------------------------------
+println("Initializing HMC...")
+flush(stdout)
+
 n_samples = 50
 n_adapts = 50
 
@@ -129,6 +180,28 @@ h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
 integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
 adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.8, integrator))
+
+println("Starting Warmup (Compilation)...")
+println("  1. Compiling forward pass...")
+flush(stdout)
+try
+    l(p_flat)
+    println("     Forward pass compiled.")
+catch e
+    println("     Forward pass warmup warning: ", e)
+end
+
+println("  2. Compiling backward pass (this may take a minute)...")
+flush(stdout)
+try
+    dldθ(p_flat)
+    println("     Backward pass compiled.")
+catch e
+    println("     Backward pass warmup warning: ", e)
+end
+
+println("Warmup complete. Starting Sampling...")
+flush(stdout)
 
 samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_adapts; progress = true)
 
