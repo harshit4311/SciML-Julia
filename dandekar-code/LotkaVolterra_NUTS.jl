@@ -92,7 +92,7 @@ end
 
 function prob_neuralode(u0, p)
     prob = DE.ODEProblem(neuralodefunc, u0, tspan, p)
-    DE.solve(prob, DE.Rodas5(), saveat = tsteps, maxiters=1e5)
+    DE.solve(prob, DE.Rodas5(), saveat=tsteps, maxiters=1e5, abstol=1e-8, reltol=1e-6)
 end
 
 
@@ -147,7 +147,7 @@ metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
 integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
-adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.8, integrator))
+adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.90, integrator))
 
 samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_adapts; progress = true)
 
