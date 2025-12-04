@@ -21,7 +21,7 @@ using Statistics: mean, std, quantile
 # import JLD2 --- (ignore for now)
 
 # -------------------------------
-# Load Russell dataset
+# Load Ideal LV dataset (from the russell-datasets/ folder)
 # -------------------------------
 df = CSV.read("/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/ideal_synthetic_LV_russell_growth_value_200.csv", DataFrames.DataFrame)
 
