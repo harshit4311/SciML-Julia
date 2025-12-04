@@ -1,6 +1,5 @@
-# dataset with single curve (used in Raj's paper with NUTS Sampler)
-
-# on CPU (on my local machine)
+# dataset with single curve (used in Raj's paper with NUTS Sampler - 36 datapoints)
+# training on CPU (on my local machine)
 
 # SciML Libraries
 import SciMLSensitivity as SMS
