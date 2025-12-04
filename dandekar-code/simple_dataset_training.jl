@@ -31,33 +31,49 @@ function lotka_volterra!(du, u, p, t)
   du[2] = dy = -δ*y + γ*x*y
 end
 
-# Initial condition for LV
-u0_lv = [1.0, 1.0]
-
-# Simulation interval and intermediary points
-tspan = (0.0, 3.5)
-tsteps = 0.0:0.1:3.5
-
 # LV equation parameter. p = [α, β, δ, γ]
 p_lv = [1.5, 1.0, 3.0, 1.0]
 
-# Generate the data
-prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
-sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat = tsteps)
-ode_data = Array(sol_lv)
+# -----------------------------
+# First cycle
+# -----------------------------
+u0_1 = [1.0, 1.0]
+tspan1 = (0.0, 3.5)
+tsteps1 = range(0.0, 3.5, length=36)
 
-# Initial condition & timespan for Neural ODE
+prob1 = DE.ODEProblem(lotka_volterra!, u0_1, tspan1, p_lv)
+sol1 = DE.solve(prob1, DE.Tsit5(), saveat=tsteps1)
+
+# -----------------------------
+# Second cycle
+# -----------------------------
+u0_2 = sol1[:, end]
+tstart2 = tsteps1[end]
+tspan2 = (tstart2, tstart2 + 3.5)
+tsteps2 = range(tstart2 + 0.1, tstart2 + 3.5, length=36)
+
+prob2 = DE.ODEProblem(lotka_volterra!, u0_2, tspan2, p_lv)
+sol2 = DE.solve(prob2, DE.Tsit5(), saveat=tsteps2)
+
+# -----------------------------
+# Combine cycles
+# -----------------------------
+tsteps = vcat(sol1.t, sol2.t)
+ode_data = hcat(Array(sol1), Array(sol2))
+
+# Update Neural ODE initial condition & datasize
 u0 = ode_data[:, 1]
 datasize = length(tsteps)
+tspan = (tsteps[1], tsteps[end])
 
 # -------------------------------
 # Neural ODE definition
 # -------------------------------
 dudt2 = Lux.Chain(
-    Lux.Dense(2, 20, Lux.tanh),
-    Lux.Dense(20, 20, Lux.tanh),
-    Lux.Dense(20, 20, Lux.tanh),
-    Lux.Dense(20, 2)
+    Lux.Dense(2, 32, Lux.tanh),
+    Lux.Dense(32, 32, Lux.tanh),
+    Lux.Dense(32, 32, Lux.tanh),
+    Lux.Dense(32, 2)
 )
 
 rng = Random.default_rng()
@@ -120,7 +136,7 @@ end
 # HMC setup
 # -------------------------------
 n_samples = 50
-n_adapts = 50
+n_adapts = 200
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
