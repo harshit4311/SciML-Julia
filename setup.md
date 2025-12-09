@@ -37,6 +37,8 @@ git clone https://github.com/Research-Commons/julia-SciML.git
 cd julia-SciML
 ```
 
+---
+
 ## 3. Activate the Project Environment
 ```bash
 julia --project=.
@@ -49,4 +51,6 @@ Pkg.activate(".")
 Pkg.instantiate()
 ```
 This installs all package versions exactly as recorded in the project and manifest files.
+
+---
 
