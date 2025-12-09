@@ -54,3 +54,8 @@ This installs all package versions exactly as recorded in the project and manife
 
 ---
 
+## 4. Run the Code from the root (example, to run Experiment-1)
+```bash
+cd SciML-Julia
+julia --project=. synthetic-dataset-experiments/exp_1.jl
+```
