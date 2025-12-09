@@ -22,6 +22,9 @@ Verify installation:
 
 ```bash
 julia --version
+```
 
 Expected:
+```bash
 julia version 1.11.6
+```
