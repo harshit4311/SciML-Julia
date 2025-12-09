@@ -23,3 +23,5 @@ Verify installation:
 ```bash
 julia --version
 
+Expected:
+julia version 1.11.6
