@@ -28,3 +28,25 @@ Expected:
 ```bash
 julia version 1.11.6
 ```
+
+---
+
+## 2. Clone the Repository 
+```bash
+git clone https://github.com/Research-Commons/julia-SciML.git
+cd julia-SciML
+```
+
+## 3. Activate the Project Environment
+```bash
+julia --project=.
+```
+
+Inside Julia, run:
+```bash
+using Pkg
+Pkg.activate(".")
+Pkg.instantiate()
+```
+This installs all package versions exactly as recorded in the project and manifest files.
+
