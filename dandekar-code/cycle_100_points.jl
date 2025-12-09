@@ -22,7 +22,7 @@ using Statistics: mean, std, quantile
 # import JLD2 --- (ignore for now)
 
 # ---------------------------------------
-# Generate Lotka-Volterra dataset
+# Generate Lotka–Volterra dataset (100 points, 2 cycles)
 # ---------------------------------------
 function lotka_volterra!(du, u, p, t)
     x, y = u
@@ -31,28 +31,28 @@ function lotka_volterra!(du, u, p, t)
     du[2] = -δ*y + γ*x*y
 end
 
-# LV equation parameters
+# LV parameters
 p_lv = [1.5, 1.0, 3.0, 1.0]
 
 # ---------------------------------------
-# Generate *2 continuous cycles* (72 points)
+# Generate *2 continuous cycles* (100 points)
 # ---------------------------------------
 u0_lv = [1.0, 1.0]
 
-# One LV cycle ≈ 3.5 time units → 2 cycles = 7.0
+# One LV cycle ≈ 3.5 → two cycles = 7.0
 tspan = (0.0, 7.0)
 
-# 72 points total → 36 points per cycle
-tsteps = range(0.0, 7.0, length=72)
+# 100 points total → 50 per cycle
+tsteps = range(0.0, 7.0, length=100)
 
-# Solve ODE (continuous trajectory)
+# Solve ODE
 prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
 sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat=tsteps)
 
-# This is now a 72×2 dataset matching Julia LV dynamics
+# Dataset: 2 variables × 100 points
 ode_data = Array(sol_lv)
 
-# Neural ODE initial condition uses first datapoint
+# Neural ODE initial condition
 u0 = ode_data[:, 1]
 
 # Update datasize
@@ -73,8 +73,8 @@ p, st = Lux.setup(rng, dudt2)
 const _st = st
 
 function neuralodefunc(u, p, t)
-    # dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
-    dudt2(u, p, _st)[1]   # NOT scaled
+    dudt2(u, p, _st)[1] .* 0.1   # SCALED by 0.1
+    # dudt2(u, p, _st)[1]   # NOT scaled
 end
 
 function prob_neuralode(u0, p)
@@ -104,7 +104,7 @@ end
 
 function loss_neuralode(p)
     pred = predict_neuralode(p)
-    loss = sum(abs2, ode_data .- pred)
+    loss = sum(abs2, ode_data .- pred) / datasize
     return loss, pred
 end
 
@@ -114,7 +114,7 @@ end
 # -------------------------------
 l(θ_flat) = begin
     θ = unflatten_p(θ_flat)
-    -sum(abs2, ode_data .- predict_neuralode(θ)) - 0.01 * sum(θ_flat .* θ_flat)
+    -sum(abs2, ode_data .- predict_neuralode(θ)) / datasize - 0.01 * sum(θ_flat .* θ_flat)
 end
 
 function dldθ(θ_flat)
@@ -128,7 +128,7 @@ end
 # HMC setup
 # -------------------------------
 n_samples = 50
-n_adapts = 200
+n_adapts = 50
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)

@@ -1,4 +1,4 @@
-# dataset with single curve (used in Raj's paper with NUTS Sampler - 36 datapoints)
+# dataset with 2 curves (used in Raj's paper with NUTS Sampler - 200 datapoints total)
 # training on CPU (on my local machine)
 
 # SciML Libraries
@@ -25,37 +25,30 @@ using Statistics: mean, std, quantile
 # Generate Lotka-Volterra dataset
 # ---------------------------------------
 function lotka_volterra!(du, u, p, t)
-    x, y = u
-    α, β, δ, γ = p
-    du[1] = α*x - β*x*y
-    du[2] = -δ*y + γ*x*y
+  x, y = u
+  α, β, δ, γ = p
+  du[1] = dx = α*x - β*x*y
+  du[2] = dy = -δ*y + γ*x*y
 end
 
-# LV equation parameters
+# LV equation parameter. p = [α, β, δ, γ]
 p_lv = [1.5, 1.0, 3.0, 1.0]
 
-# ---------------------------------------
-# Generate *2 continuous cycles* (72 points)
-# ---------------------------------------
+# -----------------------------
+# Generate 2 Cycles (200 points)
+# -----------------------------
 u0_lv = [1.0, 1.0]
-
-# One LV cycle ≈ 3.5 time units → 2 cycles = 7.0
 tspan = (0.0, 7.0)
+tsteps = range(0.0, 7.0, length=200)
 
-# 72 points total → 36 points per cycle
-tsteps = range(0.0, 7.0, length=72)
-
-# Solve ODE (continuous trajectory)
 prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
 sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat=tsteps)
-
-# This is now a 72×2 dataset matching Julia LV dynamics
 ode_data = Array(sol_lv)
+# Add noise to data so the model can learn the noise parameter sigma
+ode_data .+= 0.1 .* randn(size(ode_data))
 
-# Neural ODE initial condition uses first datapoint
+# Update Neural ODE initial condition & datasize
 u0 = ode_data[:, 1]
-
-# Update datasize
 datasize = length(tsteps)
 
 # -------------------------------
@@ -88,6 +81,8 @@ end
 # -------------------------------
 p_struct = ComponentArrays.ComponentArray{Float64}(p)
 p_flat = vec(collect(p_struct))
+# Augment parameters with log_sigma
+p_combined = [p_flat; -1.0]
 
 function unflatten_p(p_flat)
     ComponentArrays.ComponentVector(p_flat, ComponentArrays.getaxes(p_struct))
@@ -112,13 +107,25 @@ end
 # -------------------------------
 # HMC: log-likelihood & gradient
 # -------------------------------
-l(θ_flat) = begin
-    θ = unflatten_p(θ_flat)
-    -sum(abs2, ode_data .- predict_neuralode(θ)) - 0.01 * sum(θ_flat .* θ_flat)
+l(θ_combined) = begin
+    θ = unflatten_p(θ_combined[1:end-1])
+    log_sigma = θ_combined[end]
+    sigma = exp(log_sigma)
+    
+    pred = predict_neuralode(θ)
+    
+    # Log-likelihood with learnable noise sigma
+    ll = -length(ode_data) * log_sigma - 0.5 * sum(abs2, ode_data .- pred) / (sigma^2)
+    
+    # Prior
+    prior_theta = -sum(θ .* θ)
+    prior_sigma = -0.01 * log_sigma^2
+    
+    return ll + prior_theta + prior_sigma
 end
 
-function dldθ(θ_flat)
-    x, lambda = Zygote.pullback(l, θ_flat)
+function dldθ(θ_combined)
+    x, lambda = Zygote.pullback(l, θ_combined)
     grad = first(lambda(1))
     return x, grad
 end
@@ -130,13 +137,13 @@ end
 n_samples = 50
 n_adapts = 200
 
-metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
+metric = AdvancedHMC.DiagEuclideanMetric(length(p_combined))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
-integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
+integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_combined))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
 adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.80, integrator))
 
-samples, stats = AdvancedHMC.sample(h, kernel, p_flat, n_samples, adaptor, n_adapts; progress = true)
+samples, stats = AdvancedHMC.sample(h, kernel, p_combined, n_samples, adaptor, n_adapts; progress = true)
 
 
 # -------------------------------
@@ -161,11 +168,15 @@ Plots.savefig("autocor_plot.png")
 # -------------------------------
 
 # Generate predictions for all posterior samples
-predictions = [predict_neuralode(p) for p in eachcol(samples)];
+predictions = [predict_neuralode(col[1:end-1]) for col in eachcol(samples)];
+sigmas = [exp(col[end]) for col in eachcol(samples)]
+
+# Generate noisy predictions for prediction intervals
+noisy_predictions = [pred .+ sigma .* randn(size(pred)) for (pred, sigma) in zip(predictions, sigmas)]
 
 # Separate predictions for each species (Growth and Value)
-growth_preds = hcat([p[1, :] for p in predictions]...);
-value_preds = hcat([p[2, :] for p in predictions]...);
+growth_preds = hcat([p[1, :] for p in noisy_predictions]...);
+value_preds = hcat([p[2, :] for p in noisy_predictions]...);
 
 # Calculate quantiles for the 90% confidence interval
 lower_growth = [quantile(growth_preds[i, :], 0.05) for i in 1:datasize];
@@ -174,9 +185,9 @@ lower_value = [quantile(value_preds[i, :], 0.05) for i in 1:datasize];
 upper_value = [quantile(value_preds[i, :], 0.95) for i in 1:datasize];
 
 # Find the best fit prediction (lowest loss)
-losses = map(x -> loss_neuralode(x)[1], eachcol(samples));
+losses = map(x -> loss_neuralode(x[1:end-1])[1], eachcol(samples));
 idx = findmin(losses)[2];
-best_fit_prediction = predict_neuralode(samples[:, idx]);
+best_fit_prediction = predict_neuralode(samples[1:end-1, idx]);
 
 # Set y-axis limits based on the actual data range for better visualization
 data_min = minimum(ode_data)
@@ -210,8 +221,16 @@ pl = Plots.scatter(
 )
 
 for k in 1:300
-    resol = predict_neuralode(samples[:, 1:end][:, rand(1:size(samples, 2))])
-    Plots.plot!(resol[1, :], resol[2, :], alpha = 0.04, color = :purple, label = "")
+    # Sample a random posterior sample
+    idx = rand(1:size(samples, 2))
+    p_sample = samples[1:end-1, idx]
+    sigma_sample = exp(samples[end, idx])
+    
+    resol = predict_neuralode(p_sample)
+    # Add noise for visualization of predictive distribution
+    resol_noisy = resol .+ sigma_sample .* randn(size(resol))
+    
+    Plots.plot!(resol_noisy[1, :], resol_noisy[2, :], alpha = 0.04, color = :purple, label = "")
 end
 
 # Plots.plot!(prediction[1, :], prediction[2, :], color = :black, w = 2, label = "Best fit prediction")

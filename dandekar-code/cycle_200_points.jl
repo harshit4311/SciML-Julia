@@ -1,4 +1,4 @@
-# dataset with single curve (used in Raj's paper with NUTS Sampler - 36 datapoints)
+# dataset with 2 curves (used in Raj's paper with NUTS Sampler - 200 datapoints total)
 # training on CPU (on my local machine)
 
 # SciML Libraries
@@ -25,37 +25,28 @@ using Statistics: mean, std, quantile
 # Generate Lotka-Volterra dataset
 # ---------------------------------------
 function lotka_volterra!(du, u, p, t)
-    x, y = u
-    α, β, δ, γ = p
-    du[1] = α*x - β*x*y
-    du[2] = -δ*y + γ*x*y
+  x, y = u
+  α, β, δ, γ = p
+  du[1] = dx = α*x - β*x*y
+  du[2] = dy = -δ*y + γ*x*y
 end
 
-# LV equation parameters
+# LV equation parameter. p = [α, β, δ, γ]
 p_lv = [1.5, 1.0, 3.0, 1.0]
 
-# ---------------------------------------
-# Generate *2 continuous cycles* (72 points)
-# ---------------------------------------
+# -----------------------------
+# Generate 2 Cycles (200 points)
+# -----------------------------
 u0_lv = [1.0, 1.0]
-
-# One LV cycle ≈ 3.5 time units → 2 cycles = 7.0
 tspan = (0.0, 7.0)
+tsteps = range(0.0, 7.0, length=200)
 
-# 72 points total → 36 points per cycle
-tsteps = range(0.0, 7.0, length=72)
-
-# Solve ODE (continuous trajectory)
 prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
 sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat=tsteps)
-
-# This is now a 72×2 dataset matching Julia LV dynamics
 ode_data = Array(sol_lv)
 
-# Neural ODE initial condition uses first datapoint
+# Update Neural ODE initial condition & datasize
 u0 = ode_data[:, 1]
-
-# Update datasize
 datasize = length(tsteps)
 
 # -------------------------------
@@ -114,7 +105,9 @@ end
 # -------------------------------
 l(θ_flat) = begin
     θ = unflatten_p(θ_flat)
-    -sum(abs2, ode_data .- predict_neuralode(θ)) - 0.01 * sum(θ_flat .* θ_flat)
+    # Normalize total loss by datasize to keep gradient magnitude consistent
+    # (-sum(abs2, ode_data .- predict_neuralode(θ)) - 0.01 * sum(θ_flat .* θ_flat)) / datasize
+    -sum(abs2, ode_data .- predict_neuralode(θ)) - sum(θ .* θ)
 end
 
 function dldθ(θ_flat)
