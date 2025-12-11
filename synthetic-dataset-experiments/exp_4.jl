@@ -1,8 +1,6 @@
 # dataset with 2 curves (used in Raj's paper with NUTS Sampler - 200 datapoints total)
 # training on CPU (on my local machine)
 
-# same as exp_1 but training on more samples & adapts
-
 # SciML Libraries
 import SciMLSensitivity as SMS
 import DifferentialEquations as DE
@@ -123,7 +121,7 @@ end
 # HMC setup
 # -------------------------------
 n_samples = 100
-n_adapts = 300
+n_adapts = 400
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
