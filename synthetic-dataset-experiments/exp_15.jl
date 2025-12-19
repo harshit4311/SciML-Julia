@@ -1,6 +1,8 @@
 # dataset with 2 curves (used in Raj's paper with NUTS Sampler - 200 datapoints total)
 # training on CPU (on my local machine)
 
+# same as exp_1, just pre-training with MAP before HMC (trained on 200 samples & 500 adapts)
+
 # SciML Libraries
 import SciMLSensitivity as SMS
 import DifferentialEquations as DE
