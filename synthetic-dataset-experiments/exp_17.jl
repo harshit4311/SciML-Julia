@@ -1,6 +1,8 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
+# same as Exp_1, just updated code to save HMC checkpoint and resume from it
+
 # SciML Libraries
 import SciMLSensitivity as SMS
 import DifferentialEquations as DE
