@@ -25,7 +25,7 @@ import ComponentArrays
 import CSV
 import DataFrames
 using Statistics: mean, std, quantile
-# import JLD2 --- (ignore for now)
+import JLD2
 
 # ---------------------------------------
 # Generate Lotka-Volterra dataset
@@ -300,3 +300,14 @@ Plots.histogram(losses, label="Loss Distribution",
     xlabel="Loss", ylabel="Frequency",
     title="Distribution of Loss over Posterior Samples")
 Plots.savefig("loss_distribution.png")
+
+# -------------------------------
+# Save Weights
+# -------------------------------
+println("Saving weights and results...")
+JLD2.save("exp_18_weights.jld2", 
+    "samples", samples,
+    "map_estimate", p_flat,
+    "losses", losses
+)
+println("Weights saved to exp_18_weights.jld2")
