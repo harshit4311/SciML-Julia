@@ -199,8 +199,8 @@ println("Saved map_pretraining_fit.png")
 # -------------------------------
 # HMC setup
 # -------------------------------
-n_samples = 500
-n_adapts = 1000
+n_samples = 50
+n_adapts = 100
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
 h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
