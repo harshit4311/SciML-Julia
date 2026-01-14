@@ -201,7 +201,7 @@ callback_A = function (state, loss_val)
 end
 
 # Adam(0.005), Max iters: 8000
-res_A = Optimization.solve(opt_prob_A, OptimizationOptimisers.Adam(0.005), maxiters=8000, callback=callback_A)
+res_A = Optimization.solve(opt_prob_A, OptimizationOptimisers.Adam(0.005), maxiters=6700, callback=callback_A)
 p_phase_A = res_A.u
 println("Phase A complete. Final loss: ", res_A.objective)
 
@@ -241,7 +241,7 @@ callback_B = function (state, loss_val)
 end
 
 # Adam(0.001), Iters: 500-1000
-res = Optimization.solve(opt_prob_B, OptimizationOptimisers.Adam(0.001), maxiters=1000, callback=callback_B)
+res = Optimization.solve(opt_prob_B, OptimizationOptimisers.Adam(0.001), maxiters=800, callback=callback_B)
 p_flat = vcat(res.u, logσ_init)
 
 println("MAP pre-training (Phase B) complete. Final loss: ", res.objective)
