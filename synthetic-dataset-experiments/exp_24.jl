@@ -1,7 +1,7 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# same as exp_20, just increased no.of samples & adapts for HMC
+# same as exp_23, just swapping the Synthetic dataset with an Oil Markets dataset 
 
 # SciML Libraries
 import SciMLSensitivity as SMS
@@ -30,32 +30,35 @@ using Statistics: mean, std, quantile
 const w2 = 3.0
 
 # ---------------------------------------
-# Generate Lotka-Volterra dataset
+# Load Oil Market Dataset (Brent vs OECD Stocks)
 # ---------------------------------------
-function lotka_volterra!(du, u, p, t)
-  x, y = u
-  α, β, δ, γ = p
-  du[1] = dx = α*x - β*x*y
-  du[2] = dy = -δ*y + γ*x*y
-end
+using CSV, DataFrames
 
-# LV equation parameter. p = [α, β, δ, γ]
-p_lv = [1.5, 1.0, 3.0, 1.0]
+# data_path = "/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/merged_weekly_data.csv"
+# df = CSV.read(data_path, DataFrame)
 
-# -----------------------------
-# Generate 2 Cycles (200 points)
-# -----------------------------
-u0_lv = [1.0, 1.0]
-tspan = (0.0, 7.0)
-tsteps = range(0.0, 7.0, length=200)
+DATA_PATH = joinpath(homedir(), "russell-datasets", "merged_weekly_data.csv")
+df = CSV.read(DATA_PATH, DataFrame)
 
-prob_lv = DE.ODEProblem(lotka_volterra!, u0_lv, tspan, p_lv)
-sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat=tsteps)
-ode_data = Array(sol_lv)
 
-# Update Neural ODE initial condition & datasize
+# Keep only normalized columns
+df = dropmissing(df, [:Brent_norm, :Stock_norm])
+
+# Time index (weekly steps)
+tsteps = collect(1:size(df, 1)) .* 1.0
+tspan  = (tsteps[1], tsteps[end])
+
+# Build ODE data matrix: 2 × T
+ode_data = permutedims(Matrix(df[:, [:Brent_norm, :Stock_norm]]))
+
+# Initial condition
 u0 = ode_data[:, 1]
+
+# Dataset size
 datasize = length(tsteps) * size(ode_data, 1)
+
+println("Loaded oil dataset with $(size(df,1)) time steps")
+
 
 # -------------------------------
 # Neural ODE definition
