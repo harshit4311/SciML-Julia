@@ -34,11 +34,11 @@ const w2 = 3.0
 # ---------------------------------------
 using CSV, DataFrames
 
-# data_path = "/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/merged_weekly_data.csv"
-# df = CSV.read(data_path, DataFrame)
+data_path = "/Users/harshit/Downloads/Research-Commons-Quant/SciML-Julia/russell-datasets/merged_weekly_data.csv"
+df = CSV.read(data_path, DataFrame)
 
-DATA_PATH = joinpath(homedir(), "russell-datasets", "merged_weekly_data.csv")
-df = CSV.read(DATA_PATH, DataFrame)
+# DATA_PATH = joinpath(homedir(), "russell-datasets", "merged_weekly_data.csv")
+# df = CSV.read(DATA_PATH, DataFrame)
 
 
 # Keep only normalized columns
