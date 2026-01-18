@@ -1,7 +1,7 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# same as exp_23, just swapping the Synthetic dataset with an Oil Markets dataset 
+# same as exp_23, just swapping the Synthetic dataset with an Oil Markets dataset & increasing Maxiters
 
 # SciML Libraries
 import SciMLSensitivity as SMS
@@ -203,8 +203,8 @@ callback_A = function (state, loss_val)
     return stop
 end
 
-# Adam(0.005), Max iters: 8000
-res_A = Optimization.solve(opt_prob_A, OptimizationOptimisers.Adam(0.005), maxiters=6700, callback=callback_A)
+# Adam(0.005), Max iters: 10k
+res_A = Optimization.solve(opt_prob_A, OptimizationOptimisers.Adam(0.005), maxiters=10000, callback=callback_A)
 p_phase_A = res_A.u
 println("Phase A complete. Final loss: ", res_A.objective)
 
