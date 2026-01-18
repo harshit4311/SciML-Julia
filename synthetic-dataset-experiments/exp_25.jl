@@ -314,7 +314,7 @@ n_samples = 50
 n_adapts = 100
 
 metric = AdvancedHMC.DiagEuclideanMetric(length(p_flat))
-h = AdvancedHMC.Hamiltonian(metric, l, dldθ)
+h = AdvancedHMC.Hamiltonian(metric, l_train, dldθ)
 integrator = AdvancedHMC.Leapfrog(AdvancedHMC.find_good_stepsize(h, p_flat))
 kernel = AdvancedHMC.HMCKernel(AdvancedHMC.Trajectory{AdvancedHMC.MultinomialTS}(integrator, AdvancedHMC.GeneralisedNoUTurn()))
 adaptor = AdvancedHMC.StanHMCAdaptor(AdvancedHMC.MassMatrixAdaptor(metric), AdvancedHMC.StepSizeAdaptor(0.80, integrator))
