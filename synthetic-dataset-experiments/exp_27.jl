@@ -2,6 +2,7 @@
 # training on CPU (on my local machine)
 
 # Addded validation split (70-30) + monitoring val MSE during training + Forecasting setup
+# Removed Biasedness in Predator & Prey data. Now, treating both equally
 
 # SciML Libraries
 import SciMLSensitivity as SMS
