@@ -1,7 +1,7 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# same as exp_20, just increased no.of samples & adapts for HMC
+# Addded validation split (70-30) + monitoring val MSE during training + Forecasting setup
 
 # SciML Libraries
 import SciMLSensitivity as SMS
