@@ -1,7 +1,7 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# Almost similar to exp_32, just interpolating datapoints to a total of 500 points in our entire dataset
+# Almost similar to exp_33, just changed Sampling method from NUTS --> Random Walk Metropolis (RWM)
 # training on 250 pointa, validating on 250 points (instead of 100/100 split in exp_32)
 
 # SciML Libraries
