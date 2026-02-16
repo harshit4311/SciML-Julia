@@ -1,7 +1,7 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# Exact same as Exp_32 (total 200 datapoints)
+# Almost same as Exp_32 (total 200 datapoints), just changed gaussian noise from 0.05 --> 0.1
 # train/val split = 100/100
 # HMC on 50 samples, 200 adapts
 
@@ -57,7 +57,7 @@ sol_lv = DE.solve(prob_lv, DE.Tsit5(), saveat=tsteps)
 ode_data_clean = Array(sol_lv)
 
 # Inject i.i.d. Gaussian observation noise
-σ_obs = 0.05
+σ_obs = 0.1
 ode_data = ode_data_clean .+ σ_obs .* randn(size(ode_data_clean))
 
 # Update Neural ODE initial condition & datasize
