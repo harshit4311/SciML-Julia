@@ -1,7 +1,7 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# Sr.no = 2 (in final-paper-experiments Document)
+# Sr.no = 4 (in final-paper-experiments Document)
 # gaussian noise = 0.2
 # train/val split = 80/100
 # HMC on 250 samples, 250 adapts
@@ -69,8 +69,8 @@ u0 = ode_data[:, 1]
 # Data Splitting for Forecasting
 # -------------------------------
 n_total = length(tsteps)
-n_train = 80                   # training on first 150 points
-n_val   = n_total - n_train   # validating on last 50 points
+n_train = 80                   # training on first 80 points
+n_val   = n_total - n_train   # validating on last 120 points
 
 t_train = tsteps[1:n_train]
 t_val   = tsteps[n_train+1:end]
@@ -478,6 +478,22 @@ mean_growth_pp  = vec(mean(pp_growth, dims=2))
 lower_value_pp = [quantile(pp_value[i, :], 0.05) for i in 1:ntime]
 upper_value_pp = [quantile(pp_value[i, :], 0.95) for i in 1:ntime]
 mean_value_pp  = vec(mean(pp_value, dims=2))
+
+# -------------------------------
+# Uncertainty calibration
+# -------------------------------
+
+inside_growth = (ode_data[1,:] .>= lower_growth_pp) .&
+                (ode_data[1,:] .<= upper_growth_pp)
+
+inside_value = (ode_data[2,:] .>= lower_value_pp) .&
+               (ode_data[2,:] .<= upper_value_pp)
+
+coverage_growth = mean(inside_growth)
+coverage_value = mean(inside_value)
+
+println("90% CI coverage (Growth): ", coverage_growth)
+println("90% CI coverage (Value): ", coverage_value)
 
 
 # 6. Plot results (Observation CI)
