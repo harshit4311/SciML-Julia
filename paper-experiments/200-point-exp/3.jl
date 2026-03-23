@@ -1,9 +1,9 @@
 # dataset with 2 curves (200 datapoints total)
 # training on CPU (on my local machine)
 
-# Sr.no = 4 (in final-paper-experiments Document)
+# Sr.no = 3 (in final-paper-experiments Document)
 # gaussian noise = 0.2
-# train/val split = 80/100
+# train/val split = 80/120
 # HMC on 250 samples, 250 adapts
 
 # SciML Libraries
