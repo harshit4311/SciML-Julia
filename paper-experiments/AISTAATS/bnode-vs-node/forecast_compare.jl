@@ -26,10 +26,13 @@ const NSAMP    = 50
 const NADPT    = 50
 const MAXDEPTH = 6
 const DEV_TOL  = 1e-6
-# NODE_ITERS: 4000 = NODE's natural convergence ("as-deployed").
-#             1800 = matched to MAP's iter budget ("apples-to-apples").
-# Override from shell:  NODE_ITERS=1800 julia --project=../../.. forecast_compare.jl
-const NODE_ITERS = parse(Int, get(ENV, "NODE_ITERS", "4000"))
+# Matched optimisation budget: BNODE's MAP step and NODE both get the same total
+# number of Adam iterations on the same loss surface (up to the BNODE weight prior).
+# NODE_ITERS defaults to MAP_PHASEA + MAP_PHASEB so the comparison is apples-to-apples.
+# Override either with an env var, e.g. NODE_ITERS=8000 ... .
+const MAP_PHASEA = parse(Int, get(ENV, "MAP_PHASEA", "4000"))
+const MAP_PHASEB = parse(Int, get(ENV, "MAP_PHASEB", "500"))
+const NODE_ITERS = parse(Int, get(ENV, "NODE_ITERS", string(MAP_PHASEA + MAP_PHASEB)))
 # FRESH=1 wipes the CSV first; default accumulates rows so both NODE budgets land
 # in one table after two runs.
 const FRESH = get(ENV, "FRESH", "0") == "1"
@@ -66,7 +69,7 @@ plot_point_fit(prob, fns, p_node; outdir=outdir, label="NODE")
 # BNODE — MAP → HMC (Exp_C config)
 # ============================================================================
 println("\n=== BNODE (MAP → HMC) ===")
-p_map, mm = run_map(prob, fns; phaseA_iters=1500, phaseB_iters=300)
+p_map, mm = run_map(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB)
 samples, stats, nuts_rt = run_nuts(prob, fns, p_map;
                                    n_samples=NSAMP, n_adapts=NADPT, max_depth=MAXDEPTH)
 bnode_runtime = nuts_rt + 0.0    # MAP wall-clock isn't tracked separately; bias toward NUTS
@@ -108,7 +111,7 @@ append_result!(csv_path, (;
 ))
 append_result!(csv_path, (;
     method="BNODE (MAP→HMC, posterior mean)",
-    config="MAP=1500/300, NUTS=$NSAMP/$NADPT, max_depth=$MAXDEPTH, tol=$DEV_TOL",
+    config="MAP=$MAP_PHASEA/$MAP_PHASEB, NUTS=$NSAMP/$NADPT, max_depth=$MAXDEPTH, tol=$DEV_TOL",
     val_rmse=bnode_val_rmse, val_rel_err=bnode_val_rel, val_mse=bnode_val_mse,
     has_uncertainty=true, runtime_s=bnode_runtime,
 ))
