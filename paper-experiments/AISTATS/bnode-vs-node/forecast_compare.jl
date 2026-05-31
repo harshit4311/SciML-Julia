@@ -30,7 +30,7 @@ const DEV_TOL  = 1e-6
 # number of Adam iterations on the same loss surface (up to the BNODE weight prior).
 # NODE_ITERS defaults to MAP_PHASEA + MAP_PHASEB so the comparison is apples-to-apples.
 # Override either with an env var, e.g. NODE_ITERS=8000 ... .
-const MAP_PHASEA = parse(Int, get(ENV, "MAP_PHASEA", "4000"))
+const MAP_PHASEA = parse(Int, get(ENV, "MAP_PHASEA", "6000"))
 const MAP_PHASEB = parse(Int, get(ENV, "MAP_PHASEB", "500"))
 const NODE_ITERS = parse(Int, get(ENV, "NODE_ITERS", string(MAP_PHASEA + MAP_PHASEB)))
 # FRESH=1 wipes the CSV first; default accumulates rows so both NODE budgets land
