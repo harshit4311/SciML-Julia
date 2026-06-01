@@ -206,7 +206,8 @@ minimising −l is equivalent to a weight-prior-regularised weighted MSE — the
 """
 function run_map(prob, fns; phaseA_iters::Int=6000, phaseB_iters::Int=800,
                  lrA::Float64=5e-3, lrB::Float64=1e-3,
-                 cliff_thresh::Float64=1.5, plateau_thresh::Float64=1e-4, verbose::Bool=true)
+                 cliff_thresh::Float64=1.5, cliff_max_loss::Float64=500.0,
+                 plateau_thresh::Float64=1e-4, verbose::Bool=true)
     logσ_init = prob.logσ_init
     opt_func = Optimization.OptimizationFunction(
         (x, _) -> -fns.l(vcat(x, logσ_init)),
@@ -223,9 +224,14 @@ function run_map(prob, fns; phaseA_iters::Int=6000, phaseB_iters::Int=800,
             vmse, _, _ = fns.validation_metrics(state.u)
             println(@sprintf("  A iter %d  loss %.4g  valMSE %.4g", iterA[], loss_val, vmse))
         end
+        # Cliff fires only if (a) loss dropped by exp(cliff_thresh)× AND (b) the
+        # post-cliff loss is already plausibly small (< cliff_max_loss).
+        # Condition (b) prevents transient gradient-noise spikes from masquerading
+        # as real convergence — the seed-314 failure mode.
         if iterA[] > 200 && !isnan(prevA[]) && prevA[] > 0 && loss_val > 0 &&
-           (log(prevA[]) - log(loss_val) > cliff_thresh)
-            verbose && println("  cliff detected — stopping Phase A at iter $(iterA[])")
+           (log(prevA[]) - log(loss_val) > cliff_thresh) &&
+           (loss_val < cliff_max_loss)
+            verbose && println("  cliff detected — stopping Phase A at iter $(iterA[]) (loss=$(round(loss_val, digits=1)))")
             prevA[] = loss_val; return true
         end
         prevA[] = loss_val; return false
