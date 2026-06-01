@@ -22,10 +22,13 @@ include("../map-tests/lv_bnode_common.jl")
 const σ_obs    = 0.2
 const SPLIT    = 100
 const NTOT     = 200
-const NSAMP    = 50
-const NADPT    = 50
-const MAXDEPTH = 6
-const DEV_TOL  = 1e-6
+# NUTS budget — overridable via env. Defaults match map-tests Exp_C dev settings.
+# For a real posterior-mean point forecast: NSAMP=250 NADPT=250 MAXDEPTH=8 (~3 h/seed).
+# For full final budget: also DEV_TOL=1e-8 MAXDEPTH=10 (~30 h/seed).
+const NSAMP    = parse(Int,     get(ENV, "NSAMP",    "50"))
+const NADPT    = parse(Int,     get(ENV, "NADPT",    "50"))
+const MAXDEPTH = parse(Int,     get(ENV, "MAXDEPTH", "6"))
+const DEV_TOL  = parse(Float64, get(ENV, "DEV_TOL",  "1e-6"))
 # Matched optimisation budget: BNODE's MAP step and NODE both get the same total
 # number of Adam iterations on the same loss surface (up to the BNODE weight prior).
 # NODE_ITERS defaults to MAP_PHASEA + MAP_PHASEB so the comparison is apples-to-apples.
