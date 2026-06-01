@@ -15,10 +15,12 @@ const ARM   = "A_hmc_only"
 const σ_obs = 0.2            # match the other arms (paper's main regime)
 const SPLIT = 100            # train points (of n_total)
 const NTOT  = 200
-const NSAMP = 50             # small "heuristic" budget for fast iteration
-const NADPT = 50
-const MAXDEPTH = 6           # DEV: caps NUTS trajectory (~16× faster). Set 10 for camera-ready.
-const DEV_TOL  = 1e-6        # DEV: looser ODE tolerance. Set 1e-8 for camera-ready.
+# Defaults below are DEV (fast iteration). For the paper, run with:
+#   NSAMP=250 NADPT=250 MAXDEPTH=10 DEV_TOL=1e-8 julia --project=../../.. Exp_A.jl
+const NSAMP    = parse(Int,     get(ENV, "NSAMP",    "50"))
+const NADPT    = parse(Int,     get(ENV, "NADPT",    "50"))
+const MAXDEPTH = parse(Int,     get(ENV, "MAXDEPTH", "6"))
+const DEV_TOL  = parse(Float64, get(ENV, "DEV_TOL",  "1e-6"))
 
 outdir = ensure_outdir(ARM)
 prob = make_lv_problem(; σ_obs=σ_obs, n_train=SPLIT, n_total=NTOT,

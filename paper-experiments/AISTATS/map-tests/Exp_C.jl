@@ -16,10 +16,15 @@ const ARM   = "C_map_then_hmc"
 const σ_obs = 0.2            # paper's main regime (σ=0.5 is the pathological case, App. A.3)
 const SPLIT = 100
 const NTOT  = 200
-const NSAMP = 50             # small "heuristic" budget; bump to 250/250 for final
-const NADPT = 50
-const MAXDEPTH = 6           # DEV: caps NUTS trajectory (~16× faster). Set 10 for camera-ready.
-const DEV_TOL  = 1e-6        # DEV: looser ODE tolerance. Set 1e-8 for camera-ready.
+# Defaults below are DEV (fast iteration). For the paper, run with:
+#   NSAMP=250 NADPT=250 MAXDEPTH=10 DEV_TOL=1e-8 \
+#   MAP_PHASEA=6000 MAP_PHASEB=800 julia --project=../../.. Exp_C.jl
+const NSAMP      = parse(Int,     get(ENV, "NSAMP",      "50"))
+const NADPT      = parse(Int,     get(ENV, "NADPT",      "50"))
+const MAXDEPTH   = parse(Int,     get(ENV, "MAXDEPTH",   "6"))
+const DEV_TOL    = parse(Float64, get(ENV, "DEV_TOL",    "1e-6"))
+const MAP_PHASEA = parse(Int,     get(ENV, "MAP_PHASEA", "1500"))
+const MAP_PHASEB = parse(Int,     get(ENV, "MAP_PHASEB", "300"))
 
 outdir = ensure_outdir(ARM)
 prob = make_lv_problem(; σ_obs=σ_obs, n_train=SPLIT, n_total=NTOT,
@@ -27,7 +32,7 @@ prob = make_lv_problem(; σ_obs=σ_obs, n_train=SPLIT, n_total=NTOT,
 fns  = build_fns(prob)
 
 # 1) MAP checkpoint.
-p_map, mmetrics = run_map(prob, fns; phaseA_iters=1500, phaseB_iters=300)
+p_map, mmetrics = run_map(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB)
 plot_point_fit(prob, fns, p_map; outdir=outdir, label="Arm C MAP checkpoint")
 
 # 2) NUTS from the MAP checkpoint.
