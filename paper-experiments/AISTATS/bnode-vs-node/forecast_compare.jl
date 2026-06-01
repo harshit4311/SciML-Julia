@@ -33,17 +33,24 @@ const DEV_TOL  = 1e-6
 const MAP_PHASEA = parse(Int, get(ENV, "MAP_PHASEA", "6000"))
 const MAP_PHASEB = parse(Int, get(ENV, "MAP_PHASEB", "500"))
 const NODE_ITERS = parse(Int, get(ENV, "NODE_ITERS", string(MAP_PHASEA + MAP_PHASEB)))
-# FRESH=1 wipes the CSV first; default accumulates rows so both NODE budgets land
-# in one table after two runs.
+# Seeds — both default to 42 for reproducibility. Vary either (or both, e.g.
+# `DATA_SEED=7 INIT_SEED=7 julia ...`) for a multi-seed sweep with error bars.
+const DATA_SEED = parse(Int, get(ENV, "DATA_SEED", "42"))
+const INIT_SEED = parse(Int, get(ENV, "INIT_SEED", "42"))
+# FRESH=1 wipes the CSV first; default accumulates rows so multi-seed sweeps land
+# in one table.
 const FRESH = get(ENV, "FRESH", "0") == "1"
 
 # Use this script's directory, not the common module's (ensure_outdir resolves
 # @__DIR__ at the common file's location, which would put plots in map-tests/).
-outdir = joinpath(@__DIR__, "outputs", "forecast_compare_$(NODE_ITERS)"); mkpath(outdir)
+outdir = joinpath(@__DIR__, "outputs",
+                  "forecast_compare_iters$(NODE_ITERS)_d$(DATA_SEED)_i$(INIT_SEED)")
+mkpath(outdir)
 csv_path = joinpath(@__DIR__, "forecasting_results.csv")
 (FRESH && isfile(csv_path)) && rm(csv_path)
 
 prob = make_lv_problem(; σ_obs=σ_obs, n_train=SPLIT, n_total=NTOT,
+                         data_seed=DATA_SEED, init_seed=INIT_SEED,
                          solver_reltol=DEV_TOL, solver_abstol=DEV_TOL)
 fns  = build_fns(prob)
 ntime_val = length(prob.t_val)
@@ -106,12 +113,14 @@ bnode_val_rel  = norm(prob.data_val .- bnode_mean) / norm(prob.data_val)
 # ============================================================================
 append_result!(csv_path, (;
     method="NODE (Adam MSE)", config="iters=$NODE_ITERS",
+    data_seed=DATA_SEED, init_seed=INIT_SEED,
     val_rmse=node_val_rmse, val_rel_err=node_val_rel, val_mse=node_val_mse,
     has_uncertainty=false, runtime_s=node_runtime,
 ))
 append_result!(csv_path, (;
     method="BNODE (MAP→HMC, posterior mean)",
     config="MAP=$MAP_PHASEA/$MAP_PHASEB, NUTS=$NSAMP/$NADPT, max_depth=$MAXDEPTH, tol=$DEV_TOL",
+    data_seed=DATA_SEED, init_seed=INIT_SEED,
     val_rmse=bnode_val_rmse, val_rel_err=bnode_val_rel, val_mse=bnode_val_mse,
     has_uncertainty=true, runtime_s=bnode_runtime,
 ))
