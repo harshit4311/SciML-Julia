@@ -120,6 +120,17 @@ append_result!(csv_path, (;
     val_rmse=node_val_rmse, val_rel_err=node_val_rel, val_mse=node_val_mse,
     has_uncertainty=false, runtime_s=node_runtime,
 ))
+# BNODE-MAP row — the deterministic point estimate, doesn't depend on NUTS budget.
+# This is the apples-to-apples point comparison vs NODE; the posterior-mean row
+# below is for the band/UQ comparison (posterior-mean trajectory is a poor point
+# estimator on oscillatory systems due to phase-blur, see paper).
+append_result!(csv_path, (;
+    method="BNODE-MAP (point estimate)",
+    config="MAP=$MAP_PHASEA/$MAP_PHASEB",
+    data_seed=DATA_SEED, init_seed=INIT_SEED,
+    val_rmse=mm.map_rmse, val_rel_err=mm.map_rel_err, val_mse=mm.map_val_mse,
+    has_uncertainty=false, runtime_s=missing,
+))
 append_result!(csv_path, (;
     method="BNODE (MAP→HMC, posterior mean)",
     config="MAP=$MAP_PHASEA/$MAP_PHASEB, NUTS=$NSAMP/$NADPT, max_depth=$MAXDEPTH, tol=$DEV_TOL",
