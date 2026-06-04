@@ -27,9 +27,9 @@ Run (PAPER, ~24h):
 include("../map-tests/lv_bnode_common.jl")
 
 # === Config — overrides via env vars =========================================
-const NSAMP      = parse(Int,     get(ENV, "NSAMP",      "50"))
-const NADPT      = parse(Int,     get(ENV, "NADPT",      "50"))
-const MAXDEPTH   = parse(Int,     get(ENV, "MAXDEPTH",   "6"))
+const NSAMP      = parse(Int,     get(ENV, "NSAMP",      "100"))
+const NADPT      = parse(Int,     get(ENV, "NADPT",      "100"))
+const MAXDEPTH   = parse(Int,     get(ENV, "MAXDEPTH",   "8"))
 const DEV_TOL    = parse(Float64, get(ENV, "DEV_TOL",    "1e-6"))
 const MAP_PHASEA = parse(Int,     get(ENV, "MAP_PHASEA", "6000"))
 const MAP_PHASEB = parse(Int,     get(ENV, "MAP_PHASEB", "800"))
