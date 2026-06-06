@@ -381,7 +381,8 @@ Posterior predictive over the full trajectory: 90% coverage (Growth/Value),
 mean posterior validation MSE, σ̂ mean/std, and plots. NaN/Inf-robust so Arm A
 does not crash. Returns a NamedTuple of metrics.
 """
-function analyze_posterior(prob, fns, samples; outdir::String, label::String, plot::Bool=true)
+function analyze_posterior(prob, fns, samples; outdir::String, label::String, plot::Bool=true,
+                            ch1_label::String="Growth", ch2_label::String="Value")
     tsteps = prob.tsteps
     ode_data = prob.ode_data
     ntime = length(tsteps)
@@ -424,18 +425,18 @@ function analyze_posterior(prob, fns, samples; outdir::String, label::String, pl
             dmin, dmax = minimum(ode_data), maximum(ode_data)
             pad = (dmax - dmin) * 0.2
             pl = Plots.plot(tsteps, mean_g, ribbon=(mean_g .- lo_g, hi_g .- mean_g),
-                            fillalpha=0.25, color=:blue, lw=2, label="90% PP CI (Growth)",
+                            fillalpha=0.25, color=:blue, lw=2, label="90% PP CI ($ch1_label)",
                             xlabel="Time", title="$label posterior predictive",
                             ylims=(dmin - pad, dmax + pad))
             Plots.plot!(tsteps, mean_v, ribbon=(mean_v .- lo_v, hi_v .- mean_v),
-                        fillalpha=0.25, color=:red, lw=2, label="90% PP CI (Value)")
-            Plots.scatter!(tsteps, ode_data[1, :], color=:blue, alpha=0.6, label="Data: Growth")
-            Plots.scatter!(tsteps, ode_data[2, :], color=:red, alpha=0.6, label="Data: Value")
+                        fillalpha=0.25, color=:red, lw=2, label="90% PP CI ($ch2_label)")
+            Plots.scatter!(tsteps, ode_data[1, :], color=:blue, alpha=0.6, label="Data: $ch1_label")
+            Plots.scatter!(tsteps, ode_data[2, :], color=:red, alpha=0.6, label="Data: $ch2_label")
             Plots.vline!([prob.t_train[end]], color=:black, ls=:dash, label="Train/Val")
             Plots.savefig(pl, joinpath(outdir, "posterior_predictive.png"))
 
             ps = Plots.scatter(ode_data[1, :], ode_data[2, :], color=:blue, label="Data",
-                               xlabel="Growth", ylabel="Value", title="$label phase space")
+                               xlabel=ch1_label, ylabel=ch2_label, title="$label phase space")
             for _ in 1:min(300, npost)
                 resol = samples[1:end-1, rand(1:npost)]
                 r = try fns.predict(resol) catch; continue end
@@ -461,14 +462,15 @@ function analyze_posterior(prob, fns, samples; outdir::String, label::String, pl
 end
 
 """Point-estimate fit plot for the no-posterior arms (MAP-only, NeuralODE)."""
-function plot_point_fit(prob, fns, p_flat; outdir::String, label::String)
+function plot_point_fit(prob, fns, p_flat; outdir::String, label::String,
+                         ch1_label::String="Growth", ch2_label::String="Value")
     try
         pred = fns.predict(fns.unflatten_p(p_flat[1:end-1]))
-        pl = Plots.plot(prob.tsteps, pred[1, :], color=:blue, lw=2, label="Growth",
+        pl = Plots.plot(prob.tsteps, pred[1, :], color=:blue, lw=2, label=ch1_label,
                         xlabel="Time", title="$label point fit")
-        Plots.plot!(prob.tsteps, pred[2, :], color=:red, lw=2, label="Value")
-        Plots.scatter!(prob.tsteps, prob.ode_data[1, :], color=:blue, alpha=0.5, label="Data: Growth")
-        Plots.scatter!(prob.tsteps, prob.ode_data[2, :], color=:red, alpha=0.5, label="Data: Value")
+        Plots.plot!(prob.tsteps, pred[2, :], color=:red, lw=2, label=ch2_label)
+        Plots.scatter!(prob.tsteps, prob.ode_data[1, :], color=:blue, alpha=0.5, label="Data: $ch1_label")
+        Plots.scatter!(prob.tsteps, prob.ode_data[2, :], color=:red, alpha=0.5, label="Data: $ch2_label")
         Plots.vline!([prob.t_train[end]], color=:black, ls=:dash, label="Train/Val")
         Plots.savefig(pl, joinpath(outdir, "point_fit.png"))
     catch e

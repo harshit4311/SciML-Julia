@@ -27,8 +27,8 @@ Run (PAPER, ~24h):
 include("../map-tests/lv_bnode_common.jl")
 
 # === Config — overrides via env vars =========================================
-const NSAMP      = parse(Int,     get(ENV, "NSAMP",      "100"))
-const NADPT      = parse(Int,     get(ENV, "NADPT",      "100"))
+const NSAMP      = parse(Int,     get(ENV, "NSAMP",      "50"))
+const NADPT      = parse(Int,     get(ENV, "NADPT",      "50"))
 const MAXDEPTH   = parse(Int,     get(ENV, "MAXDEPTH",   "8"))
 const DEV_TOL    = parse(Float64, get(ENV, "DEV_TOL",    "1e-6"))
 const MAP_PHASEA = parse(Int,     get(ENV, "MAP_PHASEA", "6000"))
@@ -111,7 +111,8 @@ fns = build_fns(prob)
 # === MAP pre-training ========================================================
 println("\n=== MAP pre-training ===")
 p_map, mm = run_map(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB)
-plot_point_fit(prob, fns, p_map; outdir=outdir, label="Hudson Bay MAP")
+plot_point_fit(prob, fns, p_map; outdir=outdir, label="Hudson Bay MAP",
+               ch1_label="Hare", ch2_label="Lynx")
 
 # === NUTS ====================================================================
 println("\n=== NUTS sampling ===")
@@ -120,7 +121,8 @@ samples, stats, nuts_rt = run_nuts(prob, fns, p_map;
 
 # === Posterior analysis (uses shared analyze_posterior) =====================
 diag = nuts_diagnostics(samples, stats)
-post = analyze_posterior(prob, fns, samples; outdir=outdir, label="Hudson Bay BNODE")
+post = analyze_posterior(prob, fns, samples; outdir=outdir, label="Hudson Bay BNODE",
+                          ch1_label="Hare", ch2_label="Lynx")
 
 # === Forecast-window-only coverage (the real-data calibration check) =========
 # The shared analyze_posterior computes coverage over the FULL trajectory.
