@@ -72,6 +72,18 @@ const DAY_SCALE  = parse(Float64, get(ENV, "DAY_SCALE",  "28.0")) # days → [0,
 # to O(1), so equal weighting (1.0) is the honest default; exposed for ablation.
 const RNA_W = parse(Float64, get(ENV, "RNA_W", "1.0"))
 
+# Network architecture. Default 2-16-16-16-2 (~626 params) — deliberately smaller
+# than the synthetic-LV harness's 2-32-32-32-2 (2274 params), because 46 sparse
+# patients (~275 training obs) over-constrain that bigger net. Both knobs are
+# env-exposed so the capacity-vs-calibration ablation is a one-liner:
+#   HIDDEN=16 N_HIDDEN=3 → 2-16-16-16-2   (≈626)   [default]
+#   HIDDEN=16 N_HIDDEN=2 → 2-16-16-2      (≈354)
+#   HIDDEN=8  N_HIDDEN=2 → 2-8-8-2        (≈122)
+#   HIDDEN=32 N_HIDDEN=3 → 2-32-32-32-2   (2274)   [old default]
+const HIDDEN   = parse(Int, get(ENV, "HIDDEN",   "16"))   # hidden-layer width
+const N_HIDDEN = parse(Int, get(ENV, "N_HIDDEN", "3"))    # number of hidden layers
+const ARCH_STR = "2-" * join(fill(string(HIDDEN), N_HIDDEN), "-") * "-2"
+
 # Clinical thresholds (real units) used only for the decision-relevance figure.
 const CD4_AIDS_THRESH = 200.0     # cells/µL — AIDS-defining boundary
 const VL_FAIL_LOG10   = log10(200.0)  # copies/mL — clinical suppression target
@@ -141,13 +153,16 @@ n_fore_obs  = sum(length(p.fore_idx)  for p in fore_patients)
 println(@sprintf("  Train: %d patients / %d obs.  Forecast: %d patients / %d obs.",
                  length(train_patients), n_train_obs, length(fore_patients), n_fore_obs))
 
-# === Network + initial params (mirror lv_bnode_common.make_lv_problem) ========
-dudt2 = Lux.Chain(
-    Lux.Dense(2, 32, Lux.tanh),
-    Lux.Dense(32, 32, Lux.tanh),
-    Lux.Dense(32, 32, Lux.tanh),
-    Lux.Dense(32, 2),
-)
+# === Network + initial params (configurable width/depth) ======================
+function build_dudt(width::Int, nhidden::Int)
+    layers = Any[Lux.Dense(2, width, Lux.tanh)]
+    for _ in 2:nhidden
+        push!(layers, Lux.Dense(width, width, Lux.tanh))
+    end
+    push!(layers, Lux.Dense(width, 2))
+    return Lux.Chain(layers...)
+end
+dudt2 = build_dudt(HIDDEN, N_HIDDEN)
 Random.seed!(INIT_SEED)
 rng = Random.default_rng()
 p, st = Lux.setup(rng, dudt2)
@@ -155,7 +170,7 @@ p_struct  = ComponentArrays.ComponentArray{Float64}(p)
 p_flat_nn = vec(collect(p_struct))
 logσ_init = log(0.1)
 p_flat_init = vcat(p_flat_nn, logσ_init)
-println(@sprintf("  Params: %d (+1 logσ)", length(p_flat_nn)))
+println(@sprintf("  Architecture: %s → %d weights (+1 logσ)", ARCH_STR, length(p_flat_nn)))
 
 # === Pooled fns (the only real departure from the single-trajectory harness) ==
 unflatten_p(pf) = ComponentArrays.ComponentVector(pf, ComponentArrays.getaxes(p_struct))
@@ -221,9 +236,52 @@ fns = (; unflatten_p, neuralodefunc, solve_patient, l, dldθ, validation_metrics
 # prob NamedTuple in the shape the shared run_map/run_nuts drivers expect.
 prob = (; dudt2, st, p_struct, p_flat_init, logσ_init)
 
+# Plot helpers + representative patients — defined here (before MAP) so the MAP
+# figure can be written the instant MAP finishes, ahead of the long NUTS run.
+to_cd4(x) = x .* cd4_scale                        # cells/µL
+to_rna(x) = x .* rna_scale                        # log10 copies/mL
+dense_grid(pt) = collect(range(pt.t[1], pt.t[end], length=120))
+show_pat = fore_patients[unique(round.(Int, range(1, length(fore_patients), length=min(6, length(fore_patients)))))]
+
 # === MAP pre-training (shared two-phase Adam scheduler) =======================
 println("\n=== MAP pre-training (pooled) ===")
 p_map, mm = run_map(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB)
+
+# --- map_fit.png : saved NOW, right after MAP (no need to wait for NUTS) -------
+# Top row = CD4 (cells/µL, blue); bottom row = log10 viral load (red); one column
+# per patient. Both channels on their own true scale — no rescaling.
+try
+    p_map_nn = unflatten_p(p_map[1:end-1])
+    mp = show_pat[1:min(4, length(show_pat))]
+    cd4_panels = Any[]; vl_panels = Any[]
+    for (i, pt) in enumerate(mp)
+        tg = dense_grid(pt); days = tg .* DAY_SCALE; od = pt.t .* DAY_SCALE
+        traj = solve_patient(pt.u0, tg, p_map_nn)
+        lg = i == 1
+        pcd4 = Plots.plot(days, to_cd4(traj[1, :]), color=:blue, lw=2,
+                          label=(lg ? "CD4 (MAP)" : ""), title="Patient $(pt.id)",
+                          ylabel="CD4 (cells/µL)", legend=(lg ? :bottomright : false))
+        Plots.scatter!(pcd4, od, to_cd4(pt.y[1, :]), color=:blue, alpha=0.6,
+                       label=(lg ? "CD4 observed" : ""))
+        Plots.hline!(pcd4, [CD4_AIDS_THRESH], color=:black, ls=:dot, label=(lg ? "AIDS=200" : ""))
+        Plots.vline!(pcd4, [SPLIT_DAY], color=:gray, ls=:dash, label=(lg ? "train/forecast" : ""))
+
+        pvl = Plots.plot(days, to_rna(traj[2, :]), color=:red, lw=2,
+                         label=(lg ? "log10 VL (MAP)" : ""), xlabel="Day",
+                         ylabel="log10 viral load", legend=(lg ? :topright : false))
+        Plots.scatter!(pvl, od, to_rna(pt.y[2, :]), color=:red, alpha=0.6,
+                       label=(lg ? "VL observed" : ""))
+        Plots.hline!(pvl, [VL_FAIL_LOG10], color=:black, ls=:dot, label=(lg ? "suppression≈200cp" : ""))
+        Plots.vline!(pvl, [SPLIT_DAY], color=:gray, ls=:dash, label="")
+        push!(cd4_panels, pcd4); push!(vl_panels, pvl)
+    end
+    Plots.savefig(Plots.plot(cd4_panels..., vl_panels..., layout=(2, length(mp)), size=(1600, 760),
+                             plot_title="ACTG 315 — MAP pre-training fit (point estimate, real units)"),
+                  joinpath(outdir, "map_fit.png"))
+    println("MAP figure → $(joinpath(outdir, "map_fit.png"))  (saved before NUTS)")
+catch e
+    @warn "map-fit plot failed" exception=e
+end
 
 # === NUTS (shared driver) =====================================================
 println("\n=== NUTS sampling (pooled) ===")
@@ -331,39 +389,8 @@ bias_v    = [r.bias_cd4  for r in ppb]
 corr_slope_cov  = pearson(slope_v, covcd4_v)   # expect > 0: faster responders better covered
 corr_slope_bias = pearson(slope_v, bias_v)     # expect < 0: slow responders over-predicted
 
-# === Plots ====================================================================
-# Denormalisers back to real clinical units.
-to_cd4(x) = x .* cd4_scale                       # cells/µL
-to_rna(x) = x .* rna_scale                       # log10 copies/mL
-dense_grid(pt) = collect(range(pt.t[1], pt.t[end], length=120))
-
-# Pick representative patients: a few with held-out windows, spread across baseline VL.
-show_pat = fore_patients[unique(round.(Int, range(1, length(fore_patients), length=min(6, length(fore_patients)))))]
-
-# --- point_fit.png : MAP trajectory vs data for representative patients --------
-try
-    p_map_nn = unflatten_p(p_map[1:end-1])
-    plts = []
-    for pt in show_pat
-        tg = dense_grid(pt)
-        traj = solve_patient(pt.u0, tg, p_map_nn)
-        days = tg .* DAY_SCALE
-        pc = Plots.plot(days, to_cd4(traj[1, :]), color=:blue, lw=2, label="CD4 (MAP)",
-                        xlabel="Day", ylabel="CD4 / log10 VL", title="Patient $(pt.id)", legend=:right)
-        Plots.plot!(pc, days, to_rna(traj[2, :]) .* (cd4_scale/rna_scale) , color=:red, lw=2,
-                    label="log10 VL (scaled)")
-        Plots.scatter!(pc, pt.t .* DAY_SCALE, to_cd4(pt.y[1, :]), color=:blue, alpha=0.6, label="CD4 obs")
-        Plots.scatter!(pc, pt.t .* DAY_SCALE, to_rna(pt.y[2, :]) .* (cd4_scale/rna_scale),
-                       color=:red, alpha=0.6, label="VL obs")
-        Plots.vline!(pc, [SPLIT_DAY], color=:black, ls=:dash, label="train/forecast")
-        push!(plts, pc)
-    end
-    Plots.savefig(Plots.plot(plts..., layout=(2, 3), size=(1400, 700),
-                             plot_title="ACTG 315 — MAP pre-training fit (point estimate)"),
-                  joinpath(outdir, "map_fit.png"))
-catch e
-    @warn "point-fit plot failed" exception=e
-end
+# === Plots (posterior figures — map_fit.png already saved right after MAP) =====
+# to_cd4/to_rna/dense_grid/show_pat are defined above (before MAP).
 
 # --- posterior_predictive.png : 90% PP band on held-out points ----------------
 try
@@ -507,8 +534,10 @@ append_result!(csv_out, (;
     split = SPLIT,
     n_patients = n_pat,
     n_train_obs, n_fore_obs,
+    arch = ARCH_STR,
+    n_weights = length(p_flat_nn),
     config = "MAP=$MAP_PHASEA/$MAP_PHASEB, NUTS=$NSAMP/$NADPT, " *
-             "max_depth=$MAXDEPTH, tol=$DEV_TOL, split=$SPLIT, split_day=$SPLIT_DAY",
+             "max_depth=$MAXDEPTH, tol=$DEV_TOL, split=$SPLIT, split_day=$SPLIT_DAY, arch=$ARCH_STR",
     init_seed = INIT_SEED,
     cd4_scale, rna_scale,
     map_rmse       = mm.map_rmse,

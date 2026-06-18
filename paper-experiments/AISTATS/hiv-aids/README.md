@@ -75,10 +75,24 @@ Patient i:  z_i(0) = [CD4₀ⁱ, VL₀ⁱ]  → integrate → trajectory i
 
 ## Pipeline
 
-Re-uses `../map-tests/lv_bnode_common.jl` for the network architecture, the
-two-phase MAP scheduler (`run_map`), the NUTS driver (`run_nuts`), the diagnostics
-(`nuts_diagnostics`), and result aggregation. The only new machinery, defined inline
-in `hiv_aids.jl`, is:
+Re-uses `../map-tests/lv_bnode_common.jl` for the two-phase MAP scheduler
+(`run_map`), the NUTS driver (`run_nuts`), the diagnostics (`nuts_diagnostics`),
+and result aggregation.
+
+**Architecture.** Unlike Hudson Bay, the network is *not* the synthetic-LV
+2-32-32-32-2 (2274 params) — that over-parameterises 46 sparse patients (~275
+training obs). The default is a smaller **2-16-16-16-2 (~626 params)**, with width
+and depth env-configurable (`HIDDEN`, `N_HIDDEN`) so the capacity-vs-calibration
+ablation is a one-liner:
+
+| env | architecture | weights |
+|---|---|---|
+| `HIDDEN=8 N_HIDDEN=2`  | 2-8-8-2       | ~122 |
+| `HIDDEN=16 N_HIDDEN=2` | 2-16-16-2     | ~354 |
+| *(default)* `HIDDEN=16 N_HIDDEN=3` | 2-16-16-16-2 | ~626 |
+| `HIDDEN=32 N_HIDDEN=3` | 2-32-32-32-2  | 2274 |
+
+The new machinery, defined inline in `hiv_aids.jl`, is:
 
 1. Per-patient data bundling — each patient integrates from its **own first
    observation** (3 patients start at day 2, not day 0) on a rescaled time axis
