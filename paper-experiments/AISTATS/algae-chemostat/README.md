@@ -79,18 +79,65 @@ A single long experiment (e.g. C1) is the natural analogue of the Hudson Bay
 single-trajectory fit; the ten experiments together also support a pooled fit in
 the HIV style (one shared dynamics network, per-experiment initial conditions).
 
+## Pipeline
+
+`algae_chemostat.jl` re-uses `../map-tests/lv_bnode_common.jl` for the model,
+two-phase MAP scheduler (`run_map`), NUTS driver (`run_nuts`), diagnostics
+(`nuts_diagnostics`), posterior analysis (`analyze_posterior`), and result
+aggregation — mirroring `hudson_bay.jl`. It adds only:
+
+1. **Experiment selection** — one chemostat is pulled from the pooled 10-experiment
+   CSV via the `EXPT` env var (default C1, the ~374-day flagship run; the
+   single-trajectory analogue of the Hudson Bay fit).
+2. **Missing-day handling** — measurement-days missing either channel (`NaN` in
+   the source, empty in the CSV) are dropped so the Gaussian likelihood stays
+   finite; the irregular surviving sample times are used directly as `saveat`.
+3. CSV loading + per-channel normalisation (training-window mean) + time
+   rescaling (days → ODE time `[0, TMAX]`).
+4. Forecast-window posterior-predictive coverage + a decision-relevance plot.
+
+**Architecture.** The synthetic-LV 2-32-32-32-2 tanh network (2274 params) — C1
+has ~360 usable days, comparable to the synthetic 200-point fit, so unlike the
+sparse HIV case no capacity reduction is needed.
+
+**Time rescaling.** Unlike the 21-point lynx–hare record (≈2 cycles → `[0,7]`),
+C1 contains many predator–prey cycles. `TMAX` (default 30) rescales the record so
+per-cycle resolution stays in the range the network was sized for on synthetic LV;
+it is the main knob to tune (lower = compress more cycles = harder for the net;
+higher = longer integration = slower/harder NUTS).
+
+## Run
+
+**Dev (~20–40 min after precompile):**
+```bash
+cd paper-experiments/AISTATS/algae-chemostat
+julia --project=../../.. algae_chemostat.jl       # C1 by default
+EXPT=6 julia --project=../../.. algae_chemostat.jl # a different chemostat
+```
+
+**Paper (long — relax tol, deepen tree, more MAP):**
+```bash
+NSAMP=250 NADPT=250 MAXDEPTH=10 DEV_TOL=1e-8 \
+MAP_PHASEA=6000 MAP_PHASEB=800 \
+  julia --project=../../.. algae_chemostat.jl
+```
+Use `caffeinate -i bash -c '…'` on macOS to prevent sleep during long runs.
+
+## Outputs
+
+- `algae_chemostat_results.csv` — one row per run (config + all metrics; appended).
+- `outputs/algae_chemostat/`: `point_fit.png` (MAP), `posterior_predictive.png`
+  (90% PP band), `phase_space.png` (posterior cloud in algae–rotifer space),
+  `decision_relevance.png` (forecast quantiles on held-out data), and
+  `chain_trace.png` / `autocor.png` (NUTS diagnostics).
+
 ## Status / next steps
 
 - [x] Folder + data fetch (`fetch_data.jl`, `data/blasius_rotifer_algae.csv`).
-- [ ] `algae_chemostat.jl` fit script — to re-use `../map-tests/lv_bnode_common.jl`
-      (model, two-phase MAP scheduler, NUTS driver, diagnostics, plotting),
-      mirroring `hudson_bay.jl` / `hiv_aids.jl`, with:
-  1. CSV loading + per-experiment selection, normalisation (training-window
-     mean), and time rescaling (days → ODE time on the synthetic-LV scale).
-  2. Train-on-early / forecast-late split (and optionally a pooled multi-experiment
-     mode in the HIV style).
-  3. Forecast-window posterior-predictive coverage + decision-relevance plot.
-
-(The fit script is intentionally not written yet — this commit just establishes
-the folder and the reproducible data fetch, matching how the sibling folders were
-seeded.)
+- [x] Exploratory plots (`plot_data.jl` → `outputs/data_explore/`).
+- [x] `algae_chemostat.jl` single-experiment fit (verified end-to-end on a smoke
+      budget; needs a full MAP+NUTS budget for paper numbers).
+- [ ] Decide noise handling after inspecting a full-budget run (the raw series is
+      heavy-tailed/spiky; if the posterior visibly noise-chases, revisit light
+      smoothing or a larger `TMAX`).
+- [ ] Optional: pooled multi-experiment mode in the HIV style.
