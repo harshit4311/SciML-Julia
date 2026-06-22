@@ -126,10 +126,19 @@ Use `caffeinate -i bash -c '…'` on macOS to prevent sleep during long runs.
 ## Outputs
 
 - `algae_chemostat_results.csv` — one row per run (config + all metrics; appended).
-- `outputs/algae_chemostat/`: `point_fit.png` (MAP), `posterior_predictive.png`
-  (90% PP band), `phase_space.png` (posterior cloud in algae–rotifer space),
-  `decision_relevance.png` (forecast quantiles on held-out data), and
+- `outputs/algae_chemostat/`: **`posterior_faceted.png`** (the legible PP figure
+  — data points drawn on top of the 90% band, split by channel × time window,
+  `NWIN` rows; the right one to read for a dense, many-cycle run),
+  `posterior_predictive.png` (the shared single-axis PP band),
+  `point_fit.png` (MAP), `phase_space.png` (posterior cloud in algae–rotifer
+  space), `decision_relevance.png` (forecast quantiles on held-out data), and
   `chain_trace.png` / `autocor.png` (NUTS diagnostics).
+
+`plot_data.jl` writes the raw-data views to `outputs/data_explore/`:
+`C1_faceted.png` (the same time-window faceting, no posterior — the clear look at
+the raw cycles), plus `timeseries_all.png` / `phase_all.png` overviews of all 10
+experiments. `NWIN` (default 5) sets the number of time-window rows in both the
+raw and posterior faceted plots.
 
 ## Status / next steps
 
