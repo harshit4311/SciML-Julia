@@ -10,9 +10,11 @@ Outputs → outputs/data_explore/
 import CSV
 import DataFrames
 import Plots
+include("plot_helpers.jl")
 
 const DATA = joinpath(@__DIR__, "data", "blasius_rotifer_algae.csv")
 const OUT  = joinpath(@__DIR__, "outputs", "data_explore")
+const NWIN = parse(Int, get(ENV, "NWIN", "5"))     # time-window rows in faceted views
 mkpath(OUT)
 
 df = CSV.read(DATA, DataFrames.DataFrame; missingstring="")
@@ -68,21 +70,19 @@ pgrid = Plots.plot(pp...; layout=(5, 2), size=(1100, 1500),
 Plots.savefig(pgrid, joinpath(OUT, "phase_all.png"))
 println("→ phase_all.png")
 
-# ---- 3. Zoom on C1 (the long flagship run) -----------------------------------
-c1 = df[df.experiment .== 1, :]
-a_ok = present(c1.algae); r_ok = present(c1.rotifers)
-pc1 = Plots.plot(size=(1300, 460), legend=:topright, grid=false,
-                 xlabel="day", ylabel="algae (10⁶ cells/ml)",
-                 title="C1 — long-run rotifer–algae cycles (~374 days)",
-                 yguidefontcolor=:seagreen, ytickfontcolor=:seagreen)
-Plots.plot!(pc1, c1.day[a_ok], collect(skipmissing(c1.algae)),
-            color=:seagreen, lw=1.5, label="algae (prey)")
-pr1 = Plots.twinx(pc1)
-Plots.plot!(pr1, c1.day[r_ok], collect(skipmissing(c1.rotifers)),
-            color=:firebrick, lw=1.5, label="rotifers (predator)",
-            ylabel="rotifers (animals/ml)", legend=:topleft, grid=false,
-            yguidefontcolor=:firebrick, ytickfontcolor=:firebrick)
-Plots.savefig(pc1, joinpath(OUT, "C1_timeseries.png"))
-println("→ C1_timeseries.png")
+# ---- 3. Faceted zoom on C1 (the long flagship run) ---------------------------
+# Split the ~374-day record into NWIN time-window rows × 2 channel columns so the
+# individual cycles are legible instead of crammed into one axis.
+for e in (1,)
+    sub = df[df.experiment .== e, :]
+    ok = present(sub.algae) .& present(sub.rotifers)
+    day = Float64.(sub.day[ok])
+    faceted_grid(joinpath(OUT, "C$(e)_faceted.png"), day,
+                 [Float64.(sub.algae[ok]), Float64.(sub.rotifers[ok])];
+                 labels=["algae (10⁶ cells/ml)", "rotifers (animals/ml)"],
+                 colors=[:seagreen, :firebrick], nwin=NWIN,
+                 title="C$e — rotifer–algae cycles, faceted by time window")
+    println("→ C$(e)_faceted.png")
+end
 
 println("Done. Figures in $OUT")

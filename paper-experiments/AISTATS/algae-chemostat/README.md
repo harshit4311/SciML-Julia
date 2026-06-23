@@ -75,9 +75,26 @@ to forecast many periods ahead, which the 21-point lynx–hare record cannot.
   noise — the case where the framework should perform *best*, completing the
   spectrum from "framework stress-tested" to "framework validated".
 
-A single long experiment (e.g. C1) is the natural analogue of the Hudson Bay
-single-trajectory fit; the ten experiments together also support a pooled fit in
-the HIV style (one shared dynamics network, per-experiment initial conditions).
+A single experiment is the natural analogue of the Hudson Bay single-trajectory
+fit; the ten experiments together also support a pooled fit in the HIV style (one
+shared dynamics network, per-experiment initial conditions).
+
+## Which experiment to fit (important)
+
+Experiment choice dominates everything. `periodicity.jl` ranks the 10 by
+autocorrelation cycle-cleanliness; the winners are **C9** (140d, ~16-day period,
+algae ACF 0.73) and **C8** (183d, ~16-day, 0.67). The long **C1** (374d) — the
+obvious "flagship" pick — is actually **noise-dominated**: its day-to-day swings
+have no coherent slow cycle (algae ACF 0.26; even a 3-week moving average reveals
+nothing), so a smooth 2-D BNODE's MAP fit collapses to a *flat line at the mean* —
+that genuinely is the pointwise-MSE optimum there, and no amount of MAP/NUTS budget
+fixes it. On C9 the identical harness recovers the predator–prey cycle cleanly.
+
+So the **default is `EXPT=9`**, fit on a short window (`DAY_MAX=50`, ≈3 cycles) to
+keep the single-shooting solve to a few periods. Diagnostics that establish this —
+`periodicity.jl` (ACF rank → `outputs/data_explore/acf_all.png`) and
+`check_smoothing.jl` (is a slow cycle visible under the noise?) — are committed
+alongside the fit script.
 
 ## Pipeline
 
@@ -87,41 +104,68 @@ two-phase MAP scheduler (`run_map`), NUTS driver (`run_nuts`), diagnostics
 aggregation — mirroring `hudson_bay.jl`. It adds only:
 
 1. **Experiment selection** — one chemostat is pulled from the pooled 10-experiment
-   CSV via the `EXPT` env var (default C1, the ~374-day flagship run; the
-   single-trajectory analogue of the Hudson Bay fit).
-2. **Missing-day handling** — measurement-days missing either channel (`NaN` in
+   CSV via the `EXPT` env var (default **C9**; see "Which experiment to fit").
+2. **Window truncation** — `DAY_MAX` (default 50) keeps only the first N days, so
+   the single-shooting solve spans a few cycles rather than many (pointwise MSE
+   suffers phase-error collapse over many cycles).
+3. **Missing-day handling** — measurement-days missing either channel (`NaN` in
    the source, empty in the CSV) are dropped so the Gaussian likelihood stays
    finite; the irregular surviving sample times are used directly as `saveat`.
-3. CSV loading + per-channel normalisation (training-window mean) + time
+4. CSV loading + per-channel normalisation (training-window mean) + time
    rescaling (days → ODE time `[0, TMAX]`).
-4. Forecast-window posterior-predictive coverage + a decision-relevance plot.
+5. Forecast-window posterior-predictive coverage + a decision-relevance plot.
 
-**Architecture.** The synthetic-LV 2-32-32-32-2 tanh network (2274 params) — C1
-has ~360 usable days, comparable to the synthetic 200-point fit, so unlike the
-sparse HIV case no capacity reduction is needed.
+**Architecture.** The synthetic-LV 2-32-32-32-2 tanh network (2274 params); no
+capacity reduction (unlike the sparse HIV case).
 
-**Time rescaling.** Unlike the 21-point lynx–hare record (≈2 cycles → `[0,7]`),
-C1 contains many predator–prey cycles. `TMAX` (default 30) rescales the record so
-per-cycle resolution stays in the range the network was sized for on synthetic LV;
-it is the main knob to tune (lower = compress more cycles = harder for the net;
-higher = longer integration = slower/harder NUTS).
+**Time rescaling.** `TMAX` (default 7) maps the kept window to ODE time `[0,TMAX]`,
+putting ~3 cycles of the 50-day C9 window on the synthetic-LV per-cycle scale.
+Extending `DAY_MAX` to many cycles needs a proportionally larger `TMAX` and
+re-introduces single-shooting phase strain (→ multiple-shooting / smoothing).
 
 ## Run
 
-**Dev (~20–40 min after precompile):**
+**Dev (default = C9 first ~50 days, ≈3 cycles):**
 ```bash
 cd paper-experiments/AISTATS/algae-chemostat
-julia --project=../../.. algae_chemostat.jl       # C1 by default
-EXPT=6 julia --project=../../.. algae_chemostat.jl # a different chemostat
+julia --project=../../.. algae_chemostat.jl            # C9 short window
+MAP_ONLY=1 julia --project=../../.. algae_chemostat.jl # just the MAP point fit
+EXPT=8 julia --project=../../.. algae_chemostat.jl     # the other clean experiment
+DAY_MAX=Inf TMAX=30 julia --project=../../.. algae_chemostat.jl  # full C9 (~9 cycles)
 ```
 
-**Paper (long — relax tol, deepen tree, more MAP):**
+**Paper (long — many samples for ESS; keep the solver accurate):**
 ```bash
-NSAMP=250 NADPT=250 MAXDEPTH=10 DEV_TOL=1e-8 \
+NSAMP=2500 NADPT=400 MAXDEPTH=8 DEV_TOL=1e-6 \
 MAP_PHASEA=6000 MAP_PHASEB=800 \
   julia --project=../../.. algae_chemostat.jl
 ```
 Use `caffeinate -i bash -c '…'` on macOS to prevent sleep during long runs.
+
+## Performance & convergence (dev findings)
+
+A dev-budget C9 fit works — the MAP/posterior-mean track the predator–prey cycle
+and the 90% bands cover most held-out points (σ̂ ≈ 0.4, forecast coverage ≈ 0.73–0.80)
+— **but NUTS mixes very poorly**: ESS_min ≈ 1.7, R̂_max ≈ 2.1, and these do **not**
+improve with more warmup. The BNODE posterior is intrinsically curved/correlated
+(step size collapses to ~3e-4, tree depth pins at the cap), so each draw is heavily
+autocorrelated. This is a *sampling-geometry* problem, not a budget or warmup problem.
+
+What was tried (per-iteration cost, same C9 short window):
+
+| change | speed | inference | verdict |
+|---|---|---|---|
+| 2-32-32-32-2 → **2-16-16-2** (`HIDDEN`/`N_HIDDEN`) | 3.3× | R̂ 2.13→1.57, σ̂/coverage preserved | **adopted as default** |
+| `MAXDEPTH=7` (vs 8) | +2.8× | σ̂/coverage ok, EBFMI 0.42→0.20 (borderline) | speed/quality knob |
+| `DEV_TOL=1e-5` + `MAXDEPTH=6` | +6× | **broken** (EBFMI 0.11, coverage collapse) | rejected |
+| more warmup (`NADPT` 50→160) | — | R̂/ESS unchanged | doesn't help |
+
+Net: per-iteration cost is down ~9.5× from the original (2-32-32-32-2, depth-8)
+baseline, so a long run is ~1.5–2 h, not ~17 h. **The remaining blocker is ESS, not
+speed.** To get paper-trustworthy numbers, two non-speed fixes are still open:
+1. **Many more samples** (`NSAMP`≈2500) to push ESS_min toward ~100.
+2. **Multiple chains** (different `INIT_SEED`) for a meaningful R̂ — needs a small
+   wrapper around the single-chain `run_nuts`.
 
 ## Outputs
 
@@ -144,9 +188,14 @@ raw and posterior faceted plots.
 
 - [x] Folder + data fetch (`fetch_data.jl`, `data/blasius_rotifer_algae.csv`).
 - [x] Exploratory plots (`plot_data.jl` → `outputs/data_explore/`).
-- [x] `algae_chemostat.jl` single-experiment fit (verified end-to-end on a smoke
-      budget; needs a full MAP+NUTS budget for paper numbers).
-- [ ] Decide noise handling after inspecting a full-budget run (the raw series is
-      heavy-tailed/spiky; if the posterior visibly noise-chases, revisit light
-      smoothing or a larger `TMAX`).
+- [x] Experiment selection: C1 noise-dominated → **default C9** (`periodicity.jl`).
+- [x] `algae_chemostat.jl` single-experiment fit — validated on C9 short window:
+      bands track the cycle, σ̂ ≈ 0.4, coverage ≈ 0.73–0.80.
+- [x] Sampling speedup: smaller net (default) cuts per-iter cost 3.3× and improves
+      mixing; full lever sweep documented above.
+- [ ] **Convergence**: ESS_min ≈ 1.7, R̂ ≈ 2.1 — need a long run (`NSAMP`≈2500)
+      and/or multi-chain (`run_nuts` is single-chain). This is the open blocker
+      for paper numbers.
+- [ ] Optional: extend to the full C9 record (multiple-shooting / light smoothing
+      to beat single-shooting phase error over ~9 cycles).
 - [ ] Optional: pooled multi-experiment mode in the HIV style.
