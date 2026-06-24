@@ -253,6 +253,22 @@ catch e
     @warn "faceted MAP plot failed" exception=e
 end
 
+# Dump the MAP point-estimate trajectory + data so downstream residual/variance
+# diagnostics (e.g. algae-constant-condition/) can run without re-fitting.
+try
+    map_pred = fns.predict(fns.unflatten_p(p_map[1:end-1]))
+    CSV.write(joinpath(outdir, "map_prediction.csv"), DataFrames.DataFrame(
+        day            = day,
+        algae_actual   = ode_data[1, :],   algae_pred    = map_pred[1, :],
+        rotifer_actual = ode_data[2, :],   rotifer_pred  = map_pred[2, :],
+        split          = [i <= n_train ? "train" : "forecast" for i in 1:n_total],
+        experiment     = fill(EXPT, n_total),
+    ))
+    println("→ map_prediction.csv")
+catch e
+    @warn "map_prediction dump failed" exception=e
+end
+
 if MAP_ONLY
     println(@sprintf("\n[MAP_ONLY] MAP done: val_rmse=%.4f rel_err=%.3f%% (MAP=%d/%d, tmax=%.1f)",
                      mm.map_rmse, 100*mm.map_rel_err, MAP_PHASEA, MAP_PHASEB, TMAX))
