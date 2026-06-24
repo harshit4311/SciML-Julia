@@ -67,8 +67,9 @@ const NWIN       = parse(Int,     get(ENV, "NWIN",       "5"))      # time-windo
 const HIDDEN     = parse(Int,     get(ENV, "HIDDEN",     "16"))     # neural-net width
 const N_HIDDEN   = parse(Int,     get(ENV, "N_HIDDEN",   "2"))      # number of hidden tanh layers
 const MULTI_SHOOT = get(ENV, "MULTI_SHOOT", "1") == "1"            # measurement-initialised multiple shooting
-const SEG_LEN    = parse(Int,     get(ENV, "SEG_LEN",    "24"))     # MS segment length (points, ≈1.5 cycles of C9)
-const SEG_STRIDE = parse(Int,     get(ENV, "SEG_STRIDE", "12"))     # MS segment stride (points; overlap = SEG_LEN-STRIDE)
+const SEG_LEN    = parse(Int,     get(ENV, "SEG_LEN",    "36"))     # MS segment length (points, ≈2.25 cycles of C9; swept best)
+const SEG_STRIDE = parse(Int,     get(ENV, "SEG_STRIDE", "18"))     # MS segment stride (points; overlap = SEG_LEN-STRIDE)
+const PRIOR_SCALE = parse(Float64, get(ENV, "PRIOR_SCALE", "1.0"))  # weight-prior std N(0,σ²); larger = weaker reg → higher amplitude
 const MAP_ONLY   = get(ENV, "MAP_ONLY", "0") == "1"                 # fit MAP, save plot, skip NUTS
 const DAY_MAX    = parse(Float64, get(ENV, "DAY_MAX",    "Inf"))    # truncate to first DAY_MAX days (fewer cycles)
 
@@ -210,7 +211,9 @@ function build_ms_fns(prob, fns; seg_len::Int, seg_stride::Int)
             npts += size(d, 2)
         end
         ll -= npts * log(σ_b); ll -= npts * log(σ_r)
-        lp = -0.5 * sum(θ_flat[1:end-1] .^ 2) - 0.5 * logσ^2
+        # Weight prior N(0, PRIOR_SCALE²); larger scale = weaker shrinkage of the
+        # vector field → the learned limit cycle can reach higher amplitude.
+        lp = -0.5 * sum(θ_flat[1:end-1] .^ 2) / PRIOR_SCALE^2 - 0.5 * logσ^2
         return ll + lp
     end
 
