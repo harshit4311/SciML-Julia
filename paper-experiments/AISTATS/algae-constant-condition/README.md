@@ -7,32 +7,38 @@ real-data fit to a **constant-condition** experiment (where the autonomous BNODE
 well-specified) and adds a **residual-variance / stationarity diagnostic** to make the
 misspecification visible.
 
-## The discovery: C8/C9 are forced, C1–C7/C10 are not
+## The discovery: three regimes (verified against the paper, not just our CSV)
 
-The pooled CSV's `medium_N` column (external nutrient inflow Nᵢₙ, µmol N/l) is the
-chemostat's control knob. Checking it over time per experiment:
+Our model is autonomous, `ẋ = f_θ(x)`, so it can only fit **constant-condition** runs.
+**Caution:** the pooled CSV only has `medium_N` (nutrient inflow) — it does **not** have
+the **dilution rate δ**, which is the *other* control knob and the one some perturbations
+act on. So "constant `medium_N`" does **not** prove "constant conditions." The
+authoritative grouping is from Blasius 2020 Methods / Extended Data Fig. 8 (standard
+params: alga *M. minutum*, δ=0.55/day, Nᵢₙ=80):
 
-| experiment | Nᵢₙ | regime |
-|---|---|---|
-| **C1–C5, C10** | constant **80** | constant-condition — autonomous BNODE **well-specified** |
-| C6, C7 | constant **160** | constant-condition |
-| **C8, C9** | **0 ↔ 160 square wave (~8-day period)** | **externally forced** — autonomous BNODE **misspecified** |
+| group | experiments | what varies | autonomous BNODE |
+|---|---|---|---|
+| **Constant conditions** | **C1–C4** (standard); **C5** (δ=0.66, 85d); **C6, C7** (*C. vulgaris*, Nᵢₙ=160) | nothing within a run | ✅ well-specified |
+| **External forcing** | C8, C9 | Nᵢₙ square wave 160↔0, 8-day period | ❌ misspecified |
+| **Press perturbation** | **C10** | δ stepped 0.55→1.2 (day 84)→1.35 (day 123); oscillations then die | ❌ misspecified |
 
-`plot_forcing.jl` renders `outputs/forcing.png` showing the square wave on C8/C9 vs the
-flat line elsewhere.
+`plot_forcing.jl` (`outputs/forcing.png`) shows the Nᵢₙ square wave on C8/C9 — but note it
+**cannot** show C10's press (δ isn't in the data); C10 looks flat there yet is *not*
+constant-condition.
 
-**Why this matters.** Our model is autonomous, `ẋ = f_θ(x)`. A time-dependent driver
-`Nᵢₙ(t)` cannot be represented by an autonomous field, so on C9 there is a hard accuracy
-ceiling (~52% relErr) that is *insensitive to network width, MAP iters, segment length,
-and prior strength* — all of which we swept and none of which moved it. The "cleanest
-ACF" that made us pick C9 was the **forcing signal**, not intrinsic dynamics.
+**Why this matters.** A time-dependent driver `Nᵢₙ(t)` (C8/C9) or a mid-run parameter step
+(C10) cannot be represented by an autonomous field, so on C9 there is a hard accuracy
+ceiling (~52% relErr) *insensitive to network width, MAP iters, segment length, and prior*
+— all swept, none moved it. The "cleanest ACF" that made us pick C9 was the **forcing
+signal**, not intrinsic dynamics.
 
-## Expectation-setting for C1–C4
+## Candidate experiments
 
-Constant-condition ≠ clean cycle. Removing the forcing, the *intrinsic* predator–prey
-cycle in C1–C4 is faint (ACF ≈ 0.23–0.35 vs C9's forced 0.73). So expect the autonomous
-BNODE to be **well-specified but lower-amplitude / noisier** here — that's honest. (C6/C7/C10
-have stronger intrinsic cycles, ~0.4, if a cleaner constant-condition showcase is wanted.)
+Need BOTH boxes: **constant-condition** (well-specified) AND **strong intrinsic cycle**
+(real signal to fit). Only **C6 and C7** pass both (constant, ACF ~0.4). C1–C4 are
+constant but noise-dominated (ACF ~0.23–0.35 → faint/poor fit, as C1 confirmed); C5 is
+constant but weak *and* shortest; C10 is press-perturbed (out). So the headline candidates
+are **C6, C7**; keep **C9** (forcing) and **C10** (press) as honest stress cases.
 
 ## Two questions this folder answers
 

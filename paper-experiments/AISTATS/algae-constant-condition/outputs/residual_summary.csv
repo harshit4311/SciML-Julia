@@ -3,3 +3,5 @@ experiment,channel,train_std,forecast_std,ratio,rollstd_slope
 1,rotifer,0.5166,1.0181,1.971,0.001
 9,algae,0.3414,0.3436,1.007,-0.0007
 9,rotifer,0.3641,0.6635,1.822,0.00156
+6,algae,0.7461,0.6372,0.854,0.00078
+6,rotifer,0.7276,0.5883,0.808,-0.00032
