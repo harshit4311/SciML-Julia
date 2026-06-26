@@ -67,6 +67,9 @@ const NWIN       = parse(Int,     get(ENV, "NWIN",       "5"))      # time-windo
 const HIDDEN     = parse(Int,     get(ENV, "HIDDEN",     "16"))     # neural-net width
 const N_HIDDEN   = parse(Int,     get(ENV, "N_HIDDEN",   "2"))      # number of hidden tanh layers
 const MULTI_SHOOT = get(ENV, "MULTI_SHOOT", "1") == "1"            # measurement-initialised multiple shooting
+const BEST_VAL   = get(ENV, "BEST_VAL", "1") == "1"               # MAP returns best-forecast weights, not last
+const VAL_EVERY  = parse(Int, get(ENV, "VAL_EVERY", "25"))         # eval forecast MSE every N iters for checkpointing
+const INIT_FROM  = get(ENV, "INIT_FROM", "")                       # warm-start NN weights from this CSV (growing-horizon)
 const SEG_LEN    = parse(Int,     get(ENV, "SEG_LEN",    "36"))     # MS segment length (points, ≈2.25 cycles of C9; swept best)
 const SEG_STRIDE = parse(Int,     get(ENV, "SEG_STRIDE", "18"))     # MS segment stride (points; overlap = SEG_LEN-STRIDE)
 const PRIOR_SCALE = parse(Float64, get(ENV, "PRIOR_SCALE", "1.0"))  # weight-prior std N(0,σ²); larger = weaker reg → higher amplitude
@@ -76,6 +79,7 @@ const DAY_MAX    = parse(Float64, get(ENV, "DAY_MAX",    "Inf"))    # truncate t
 outdir = joinpath(@__DIR__, "outputs", "algae_chemostat")
 mkpath(outdir)
 csv_out = joinpath(@__DIR__, "algae_chemostat_results.csv")
+const SAVE_PARAMS = get(ENV, "SAVE_PARAMS", "")                    # write fitted NN weights here (for warm-starting)
 
 # === Load + select experiment + drop missing days ============================
 #
@@ -152,6 +156,19 @@ p_flat_nn = vec(collect(p_struct))
 logσ_init = log(0.1)
 p_flat_init = vcat(p_flat_nn, logσ_init)
 println(@sprintf("  Params: %d (+1 logσ)", length(p_flat_nn)))
+
+# Warm-start: load NN weights from a previous fit (the growing-horizon curriculum
+# seeds each longer window from the shorter one so the optimiser starts inside the
+# cycle basin instead of searching from flat over many cycles). Requires the same
+# architecture (HIDDEN/N_HIDDEN).
+if !isempty(INIT_FROM)
+    isfile(INIT_FROM) || error("INIT_FROM=$INIT_FROM not found")
+    w = Vector{Float64}(CSV.read(INIT_FROM, DataFrames.DataFrame).w)
+    length(w) == length(p_flat_nn) ||
+        error("INIT_FROM has $(length(w)) weights ≠ network's $(length(p_flat_nn)); match HIDDEN/N_HIDDEN")
+    global p_flat_init = vcat(w, logσ_init)
+    println("  Warm-start: loaded $(length(w)) weights from $INIT_FROM")
+end
 
 # === Construct prob NamedTuple in the shape build_fns expects ================
 prob = (;
@@ -232,9 +249,76 @@ else
     println("  Single shooting (MULTI_SHOOT=0)")
 end
 
+# === Best-validation MAP driver ==============================================
+# Same two-phase Adam schedule as the shared run_map, but tracks the forecast
+# (validation) MSE every VAL_EVERY iters and RETURNS THE BEST-FORECAST WEIGHTS,
+# not the last. Fixes the recurring failure where the optimizer finds the cycle
+# at a loss cliff, then keeps training and overfits the training segments
+# (forecast MSE climbs again). Local to this script — the shared harness and the
+# Hudson Bay / HIV siblings are untouched.
+function run_map_bestval(prob, fns; phaseA_iters::Int, phaseB_iters::Int,
+                         lrA::Float64=5e-3, lrB::Float64=1e-3, val_every::Int=25,
+                         cliff_thresh::Float64=1.5, cliff_max_loss::Float64=500.0,
+                         plateau_thresh::Float64=1e-4)
+    logσ_init = prob.logσ_init
+    opt_func = Optimization.OptimizationFunction(
+        (x, _) -> -fns.l(vcat(x, logσ_init)), Optimization.AutoZygote())
+
+    best_u = Ref{Any}(nothing); best_val = Ref(Inf); last_val = Ref(NaN)
+    checkpoint! = function (u, it)
+        if it % val_every == 0
+            v = try fns.validation_metrics(u)[1] catch; Inf end
+            last_val[] = v
+            if isfinite(v) && v < best_val[]; best_val[] = v; best_u[] = copy(u); end
+        end
+    end
+
+    println("🔵 Phase A — discover dynamics (best-val checkpointing)")
+    iterA = Ref(0); prevA = Ref(NaN)
+    cbA = function (state, loss_val)
+        iterA[] += 1; checkpoint!(state.u, iterA[])
+        iterA[] % 100 == 0 && println(@sprintf("  A iter %d  loss %.4g  valMSE %.4g  best %.4g",
+                                                iterA[], loss_val, last_val[], best_val[]))
+        if iterA[] > 200 && !isnan(prevA[]) && prevA[] > 0 && loss_val > 0 &&
+           (log(prevA[]) - log(loss_val) > cliff_thresh) && (loss_val < cliff_max_loss)
+            println("  cliff detected — stopping Phase A at iter $(iterA[])"); prevA[] = loss_val; return true
+        end
+        prevA[] = loss_val; return false
+    end
+    res_A = Optimization.solve(
+        Optimization.OptimizationProblem(opt_func, prob.p_flat_init[1:end-1]),
+        OptimizationOptimisers.Adam(lrA); maxiters=phaseA_iters, callback=cbA)
+
+    println("🟢 Phase B — stabilize geometry")
+    iterB = Ref(0); prevB = Ref(NaN)
+    cbB = function (state, loss_val)
+        iterB[] += 1; checkpoint!(state.u, iterB[])
+        iterB[] % 100 == 0 && println(@sprintf("  B iter %d  loss %.4g  valMSE %.4g  best %.4g",
+                                                iterB[], loss_val, last_val[], best_val[]))
+        if iterB[] > 100 && !isnan(prevB[]) && abs(prevB[] - loss_val) < plateau_thresh
+            println("  plateau detected — stopping Phase B at iter $(iterB[])"); prevB[] = loss_val; return true
+        end
+        prevB[] = loss_val; return false
+    end
+    res_B = Optimization.solve(
+        Optimization.OptimizationProblem(opt_func, res_A.u),
+        OptimizationOptimisers.Adam(lrB); maxiters=phaseB_iters, callback=cbB)
+
+    # Final weights are also a checkpoint candidate.
+    vf = try fns.validation_metrics(res_B.u)[1] catch; Inf end
+    (isfinite(vf) && vf < best_val[]) && (best_val[] = vf; best_u[] = copy(res_B.u))
+    u_best = best_u[] === nothing ? res_B.u : best_u[]
+    mse, rmse, rel = fns.validation_metrics(u_best)
+    println(@sprintf("MAP(best-val) done. best valMSE=%.4g  valRMSE=%.4g  relErr=%.3f%%  (last valMSE=%.4g)",
+                     best_val[], rmse, 100rel, vf))
+    return vcat(u_best, logσ_init), (; map_loss=res_B.objective, map_val_mse=mse, map_rmse=rmse, map_rel_err=rel)
+end
+
 # === MAP pre-training ========================================================
 println("\n=== MAP pre-training ===")
-p_map, mm = run_map(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB)
+p_map, mm = BEST_VAL ?
+    run_map_bestval(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB, val_every=VAL_EVERY) :
+    run_map(prob, fns; phaseA_iters=MAP_PHASEA, phaseB_iters=MAP_PHASEB)
 plot_point_fit(prob, fns, p_map; outdir=outdir, label="Chemostat C$EXPT MAP",
                ch1_label="Algae", ch2_label="Rotifers")
 
@@ -267,6 +351,16 @@ try
     println("→ map_prediction.csv")
 catch e
     @warn "map_prediction dump failed" exception=e
+end
+
+# Save fitted NN weights for warm-starting the next (longer) horizon stage.
+if !isempty(SAVE_PARAMS)
+    try
+        CSV.write(SAVE_PARAMS, DataFrames.DataFrame(w = p_map[1:end-1]))
+        println("→ saved params to $SAVE_PARAMS")
+    catch e
+        @warn "param save failed" exception=e
+    end
 end
 
 if MAP_ONLY
