@@ -9,12 +9,16 @@
 # checkpointing (BEST_VAL=1) keeps each stage's best-forecast weights.
 #
 # Run from paper-experiments/AISTATS/algae-chemostat/ :
-#   bash grow_horizon.sh 6
+#   bash grow_horizon.sh 6                                  # MAP curriculum only
+#   RUN_HMC=1 NSAMP=100 NADPT=200 MAXDEPTH=10 bash grow_horizon.sh 6   # … then HMC on the full record
 # (no `set -e`: one stage hiccuping should not abort the whole ladder)
 
 EXPT=${1:-6}
 DPU=${DPU:-7.5}                 # days per ODE-time unit (constant across stages)
 A=${MAP_PHASEA:-4000}; B=${MAP_PHASEB:-200}
+# RUN_HMC=1 → the FINAL (full-record) stage continues into NUTS instead of stopping
+# at MAP; earlier stages stay MAP-only (they only build the warm-start).
+HMC=${RUN_HMC:-0}; NSAMP=${NSAMP:-100}; NADPT=${NADPT:-200}; MAXDEPTH=${MAXDEPTH:-10}
 PARAMS=outputs/algae_chemostat/map_params_C${EXPT}.csv
 DATA=data/blasius_rotifer_algae.csv
 
@@ -34,11 +38,17 @@ for DM in "${STAGES[@]}"; do
   # Warm-start every stage after the first (env passes an *expanded* assignment,
   # unlike a bare `$INIT cmd` prefix which bash won't re-parse as an assignment).
   if [ "$i" -eq 1 ]; then INIT=""; MODE="random-init"; else INIT="INIT_FROM=$PARAMS"; MODE="warm-start"; fi
+  # Final stage runs NUTS when RUN_HMC=1; all others are MAP-only.
+  if [ "$i" -eq "${#STAGES[@]}" ] && [ "$HMC" -eq 1 ]; then
+    ONLY=""; EXTRA="NSAMP=$NSAMP NADPT=$NADPT MAXDEPTH=$MAXDEPTH"; MODE="$MODE → HMC ($NSAMP/$NADPT, max_depth=$MAXDEPTH)"
+  else
+    ONLY="MAP_ONLY=1"; EXTRA=""
+  fi
   echo
   echo "===== stage $i/${#STAGES[@]}: C$EXPT  DAY_MAX=$DM  TMAX=$TMAX  $MODE ====="
   rm -f outputs/algae_chemostat/map_faceted.png      # so a failed stage can't leave a stale plot
-  env MAP_ONLY=1 EXPT=$EXPT DAY_MAX=$DM TMAX=$TMAX MAP_PHASEA=$A MAP_PHASEB=$B \
-      BEST_VAL=1 NWIN=7 SAVE_PARAMS=$PARAMS $INIT \
+  env $ONLY EXPT=$EXPT DAY_MAX=$DM TMAX=$TMAX MAP_PHASEA=$A MAP_PHASEB=$B \
+      BEST_VAL=1 NWIN=7 SAVE_PARAMS=$PARAMS $INIT $EXTRA \
       caffeinate -i julia --project=../../.. algae_chemostat.jl
   if [ -f outputs/algae_chemostat/map_faceted.png ]; then
     cp outputs/algae_chemostat/map_faceted.png outputs/algae_chemostat/map_faceted_C${EXPT}_dm${DM}.png
